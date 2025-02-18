@@ -68,3 +68,6 @@ report/*.bib
 report/*.bbl
 report/*.blg
 report/sections/*
+
+#Data
+Data/*

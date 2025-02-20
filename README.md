@@ -29,6 +29,16 @@ git clone git@gitlab.developers.cam.ac.uk:phy/data-intensive-science-mphil/asses
 ```
 
 #### Environment
+FOR MAC WITH APPLE SILICON:
+
+CONDA_SUBDIR=osx-64 conda create -n tomosipo python=3.9
+conda install astra-toolbox/label/dev::astra-toolbox
+conda install aahendriksen::tomosipo
+conda install pytorch
+conda install h5py
+
+
+
 To set up the environment for this project, first, ensure Python 3.9 is installed on your system. You can verify this by running 
 
 ```bash

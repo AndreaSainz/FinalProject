@@ -52,7 +52,7 @@ class LoDoPaBDataset(Dataset):
         """
 
         #Calculating the file number. The idx will be a number between 0 and 128*number of files (because each file contains 128 images)
-        file_number = int(idx/len(self.files))
+        file_number = int(idx/128)
         print(f"Taking file number: {file_number}")
 
         # Get the file corresponding to the index
@@ -68,7 +68,7 @@ class LoDoPaBDataset(Dataset):
         sample = torch.tensor(ground_truth, dtype=torch.float32)
         
         # Compute the local index within the file
-        local_idx = idx % 128
+        local_idx = idx - 128*file_number
         print(f"Taking image number: {local_idx}")
         
         # Extract the specific slice
@@ -96,4 +96,4 @@ class LoDoPaBDataset(Dataset):
         #Backprojecting sinogram to check that I can get the same image
         back_projection = A.T(sinogram)
         
-        return {'ground_truth': sample, 'sinogram': sinogram, 'backprojection': back_projection}
+        return {'ground_truth': sample_slice, 'sinogram': sinogram, 'backprojection': back_projection}

@@ -1,7 +1,6 @@
 .DS_Store
 # Python bytecode
 __pycache__/
-dual_autodiff/__pycache__/*
 test/__pycache__/*
 *.py[cod]
 
@@ -9,13 +8,7 @@ test/__pycache__/*
 dist/
 build/
 *.egg-info/
-dual_autodiff_x/src/*.egg-info/
-dual_autodiff_x/build/
-dual_autodiff_x/build
-dual_autodiff_x/dist/
-dual_autodiff_x/.pytest_cache/*
-dual_autodiff_x/.eggs/
-dual_autodiff_x/tests/__pycache__/*
+
 # Virtual environments
 venv/
 env/
@@ -51,8 +44,7 @@ docs/_static
 docs/_templates
 
 # Wheel content
-dual_autodiff_x/wheel_contents_cp310/
-dual_autodiff_x/wheel_contents_cp311/
+
 
 #Report
 report/*.tex

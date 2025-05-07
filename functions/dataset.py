@@ -240,7 +240,7 @@ class LoDoPaBDataset(Dataset):
 
                                                                                 
         #Create single-back projections
-        single_back_projections = self._generate_single_backprojections(sinogram)
+        single_back_projections = self._generate_single_backprojections(noisy_sinogram)
 
         return {'ground_truth': sample_slice, 
         'sinogram': sinogram, 

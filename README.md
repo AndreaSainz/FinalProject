@@ -1,5 +1,5 @@
-# M1 coursework
-This is a private repository for uploading Machine Learning coursework for the Mphil in Data Intensive Science.
+# Final Project
+This is a private repository for uploading the final project code for the Mphil in Data Intensive Science.
 
 ## Declarations of use of autogeneration tools 
 

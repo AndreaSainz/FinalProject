@@ -119,7 +119,7 @@ class LoDoPaBDataset(Dataset):
         measured_photons = torch.clamp(measured_photons, min=1.0)
 
         # Convert back to log domain (using Beer–Lambert Law)
-        noisy_sinogram = -torch.log(measured_photons / self.i_0)
+        noisy_sinogram = measured_photons + sinogram           # -torch.log(measured_photons / self.i_0)
 
         # Adding gaussian noise (detector's imperfections)
         gaussian_noise = torch.normal(mean=0, std=self.sigma, size=sinogram.shape, dtype=sinogram.dtype, device=sinogram.device) 

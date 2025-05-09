@@ -8,14 +8,19 @@ from torch.nn import Sequential
 from torch.nn import MSELoss
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torchmetrics.functional import structural_similarity_index_measure as ssim
 from functions.dataset import LoDoPaBDataset
+from functions.early_stopping import EarlyStopping
+from torch.utils.data import DataLoader
 import time
 from tqdm import tqdm
+import json
+import random
+import numpy as np
+from torchsummary import summary
 
 
 
-
+# ================================================= Deep Back Proyection Model Class =================================================
 class DBP(Module):
     """
     Deep Backprojection (DBP) network for CT reconstruction.
@@ -28,6 +33,7 @@ class DBP(Module):
         - 15 repeated Conv2d + BatchNorm2d + ReLU blocks.
         - Final Conv2d layer producing single-channel output.
     """
+
 
     def __init__(self, in_channels):
         super().__init__()
@@ -43,6 +49,7 @@ class DBP(Module):
         self.final = self.final_layer(in_channels=64, out_channels=1, kernel_size=3, stride=1, padding=1)
 
 
+
     def initial_layer(self, in_channels, out_channels, kernel_size, stride, padding):
         """
         Creates the initial convolutional layer with ReLU activation.
@@ -55,6 +62,8 @@ class DBP(Module):
                     Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding),
                     ReLU(inplace=True))
        return initial
+
+
 
     def conv_block(self, in_channels, out_channels, kernel_size, stride, padding):
         """
@@ -71,6 +80,7 @@ class DBP(Module):
        return convolution
 
 
+
     def final_layer(self, in_channels, out_channels, kernel_size, stride, padding):
         """
         Creates the final convolutional layer without activation.
@@ -81,6 +91,7 @@ class DBP(Module):
 
        final = Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
        return final
+
 
 
     def forward(self, x):
@@ -99,20 +110,49 @@ class DBP(Module):
 
 
 
-# metric functions
-def compute_psnr(reconstructed, reference, max_val=1.0):
-    mse = torch.mean((reconstructed - reference) ** 2)
+# ================================================= metric functions =================================================
+def compute_psnr(mse, max_val=1.0):
+    """
+    Computes the Peak Signal-to-Noise Ratio (PSNR) between two images.
+
+    Args:
+        mse (torch.Tensor or float): The mean squared error between reconstructed and reference images.
+        max_val (float, optional): The maximum possible pixel value of the images (default: 1.0).
+
+    Returns:
+        float: PSNR value in decibels (dB). Returns infinity if MSE is zero.
+    """
+    # if mse is a tensor, extract the value
+    if isinstance(mse, torch.Tensor):
+        mse = mse.item()
+    
+    # if MSE is zero, return infinite PSNR (perfect match)
     if mse == 0:
         return float('inf')
-    psnr = 10 * torch.log10(max_val ** 2 / mse)
-    return psnr.item()
+    
+    # calculate PSNR using the standard formula
+    psnr = 10 * math.log10(max_val ** 2 / mse)
+
+    return psnr
 
 def compute_ssim(reconstructed, reference):
-    # both inputs must be shape [N, C, H, W]
+    """
+    Computes the Structural Similarity Index (SSIM) between two images.
+
+    Args:
+        reconstructed (torch.Tensor): The reconstructed or predicted image tensor with shape [Batch size, Channels, Height, Weight].
+        reference (torch.Tensor): The ground truth or reference image tensor with shape [B, C, H, W].
+
+    Returns:
+        float: SSIM value between -1 and 1, where 1 means perfect similarity.
+    """
+    # both inputs must be shape [B, C, H, W]
     return ssim(reconstructed, reference).item()
 
-    
-#training functions
+
+
+
+# ================================================= training functions =================================================
 def training_dbp(in_channels, training_path, validtion_path, model_path, n_single_BP, i_0 , sigma, seed, debug, batch_size, epochs, learning_rate):
     """
     Trains the DBP model on provided training and validation datasets.
@@ -134,6 +174,14 @@ def training_dbp(in_channels, training_path, validtion_path, model_path, n_singl
     Saves:
         - Trained model state dictionary.
     """
+    # fix seed
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     # set the device we will be using to train the model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -142,13 +190,11 @@ def training_dbp(in_channels, training_path, validtion_path, model_path, n_singl
     train_data = LoDoPaBDataset(training_path, n_single_BP, i_0, sigma, seed, debug)
     val_data = LoDoPaBDataset(validtion_path, n_single_BP, i_0, sigma, seed, debug)
 
-    # create dataloader for both
-    train_dataloader = DataLoader(train_data, batch_size, shuffle=True, seed = seed)
+    # create dataloader for both and a generator for reproducibility
+    g = torch.Generator() 
+    g.manual_seed(seed)
+    train_dataloader = DataLoader(train_data, batch_size, shuffle=True, generator=g, worker_init_fn=lambda _: np.random.seed(seed))
     val_dataloader = DataLoader(val_data, batch_size) # validation and test do not need shuffle
-
-    # calculate steps per epoch for training and validation set
-    train_steps = len(train_dataloader.dataset) // batch_size
-    val_steps = len(val_dataloader.dataset) // batch_size
 
     # initialize the DBP model
     if debug:
@@ -156,14 +202,32 @@ def training_dbp(in_channels, training_path, validtion_path, model_path, n_singl
 
     model = DBP(in_channels=in_channels).to(device)
 
+    # show model summary
+    sample = next(iter(train_dataloader))[3]  # single_back_projections
+    summary(model, input_size=(in_channels, height, width))
+
+    # confirmation for the model to be train 
+    confirm = input("Is this the architecture you want to train? (yes/no): ")
+    if confirm.strip().lower() != "yes":
+        print("[INFO] Training aborted.")
+        return  
+
     # initialize Adam optimizer and MSE loss function
     opt = Adam(model.parameters(), lr=learning_rate)
     loss = MSELoss()
 
+    # initialize early stopping
+    early_stopping = EarlyStopping(patience=10, debug=True, path=f'{model_path}_best.pth')
+
+    # initialize scheduler for learning rate
+    scheduler = ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=5)
+
     # initialize a dictionary to store training history
-    losses = {
+    history = {
         "train_loss": [],
-        "val_loss": []
+        "val_loss": [],
+        "psnr": [],
+        "ssim":[]
     }
 
     # measure how long training is going to take
@@ -191,15 +255,15 @@ def training_dbp(in_channels, training_path, validtion_path, model_path, n_singl
 
             # perform a forward pass and calculate the training loss
             pred = model(single_back_projections)
-            los = loss(pred, ground_truth)
+            loss_value = loss(pred, ground_truth)
 
             # zero out the gradients, perform the backpropagation step, and update the weights
             opt.zero_grad()
-            loss.backward()
+            loss_value.backward()
             opt.step()
 
             # add the loss to the total training loss so far
-            total_train_loss += los.item()
+            total_train_loss += loss_value.item()
             
 
 
@@ -209,6 +273,10 @@ def training_dbp(in_channels, training_path, validtion_path, model_path, n_singl
             # set the model in evaluation mode
             model.eval()
 
+            # initialize metrics
+            total_psnr = 0
+            total_ssim = 0
+
             # loop over the validation set
             for (ground_truth, sinogram, noisy_sinogram, single_back_projections) in tqdm(val_dataloader, desc=f"Validation Epoch {e+1}"):
 
@@ -217,17 +285,42 @@ def training_dbp(in_channels, training_path, validtion_path, model_path, n_singl
 
                 # make the predictions and calculate the validation loss
                 pred = model(single_back_projections)
-                total_val_loss += loss(pred, ground_truth)
+                mse_val = loss(pred, ground_truth).item()
+                total_val_loss += mse_val
 
+                # compute metrics
+                total_psnr += compute_psnr(pred, ground_truth, mse_val)
+                total_ssim += compute_ssim(pred, ground_truth)
+            
+            
         # update our training history
         avg_train_loss = total_train_loss / len(train_dataloader)
-        losses["train_loss"].append(total_train_loss.cpu().detach().numpy())
-        losses["val_loss"].append(total_val_loss.cpu().detach().numpy())
-    
+        avg_val_loss = total_val_loss / len(val_dataloader)
+        history["train_loss"].append(avg_train_loss)
+        history["val_loss"].append(avg_val_loss)
+
+        avg_psnr = total_psnr / len(val_dataloader)
+        avg_ssim = total_ssim / len(val_dataloader)
+        history["psnr"].append(avg_psnr)
+        history["ssim"].append(avg_ssim)
+
+        # update the learning rate scheduler
+        scheduler.step(avg_train_loss)
+
+        # check ealy stopping
+        early_stopping(avg_val_loss, model)
+
+        if early_stopping.early_stop:
+            print(f"[INFO] Early stopping stopped at epoch {e+1}")
+            break
+        else:
+            torch.save(model.state_dict(), f'{model_path}_final.pth')
+        
+
         # print the model training and validation information
         t.set_postfix({
-            "train_loss": f"{total_train_loss:.6f}",
-            "val_loss": f"{total_val_loss:.6f}"
+            "train_loss": f"{avg_train_loss:.6f}",
+            "val_loss": f"{avg_val_loss:.6f}"
         })
 
     # finish measuring how long training took
@@ -235,10 +328,14 @@ def training_dbp(in_channels, training_path, validtion_path, model_path, n_singl
     if debug:
         print("[INFO] total time taken to train the model: {:.2f}s".format(end_time - start_time))
 
-    # Save the final model
-    torch.save(model.state_dict(), f'{model_path}.pth')
+    # Save final metrics
+    with open(f'{model_path}_metrics.json', 'w') as f:
+        json.dump(history, f)
+
     if debug:
-        print(f"[INFO] Model saved as '{model_path}.pth'")
+        print(f"[INFO] Metrics saved as '{model_path}_metrics.json'")
+    
+    return history, model
 
 
     

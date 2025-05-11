@@ -6,11 +6,13 @@ class EarlyStopping:
 
     Args:
         patience (int): How many epochs to wait after last improvement.
-        verbose (bool): If True, prints messages when improvement happens.
-        delta (float): Minimum change to count as improvement.
-        path (str): Where to save the best model.
+        debug (bool): If True, logs detailed messages.
+        delta (float): Minimum change to qualify as an improvement.
+        path (str): Path to save the best model.
+        logger (logging.Logger, optional): Logger for output messages.
     """
-    def __init__(self, patience=10, debug=False, delta=0, path='checkpoint.pth'):
+
+    def __init__(self, patience=10, debug=False, delta=0, path='checkpoint.pth', logger=None):
         self.patience = patience
         self.debug = debug
         self.counter = 0
@@ -19,6 +21,8 @@ class EarlyStopping:
         self.val_loss_min = float('inf')
         self.delta = delta
         self.path = path
+        self.logger = logger or logging.getLogger(__name__) 
+
 
     def __call__(self, val_loss, model):
         score = -val_loss
@@ -29,8 +33,10 @@ class EarlyStopping:
         elif score < self.best_score + self.delta:
             self.counter += 1
             if self.debug:
-                print(f"[INFO] EarlyStopping counter: {self.counter} out of {self.patience}")
+                self.logger.info(f"[EarlyStopping] EarlyStopping counter: {self.counter} out of {self.patience}")
             if self.counter >= self.patience:
+                if self.debug:
+                    self.logger.info("[EarlyStopping] Stopping early.")
                 self.early_stop = True
         else:
             self.best_score = score
@@ -40,6 +46,6 @@ class EarlyStopping:
     def save_checkpoint(self, val_loss, model):
         '''Saves model when validation loss decreases.'''
         if self.debug:
-            print(f"[INFO] Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}). Saving model...")
+            self.logger.info(f"[EarlyStopping] Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}). Saving model...")
         torch.save(model.state_dict(), self.path)
         self.val_loss_min = val_loss

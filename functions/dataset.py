@@ -22,7 +22,7 @@ class LoDoPaBDataset(Dataset):
     """
 
 
-    def __init__(self, ground_truth_dir, n_single_BP= 16, i_0 = 1000, sigma = 1, seed = 29072000, debug = False):
+    def __init__(self, ground_truth_dir, n_single_BP= 16, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, debug = False):
         
         #Scan parameters from the paper and data
         self.pixels = 362               # Image resolution of 362x362 pixels on a domain size of 26x26 cm
@@ -32,6 +32,7 @@ class LoDoPaBDataset(Dataset):
         self.src_det_dist = 1050
         self.slices_per_file = 128
         self.n_single_BP = n_single_BP
+        self.alpha = alpha
         
 
         # Noise parameter  
@@ -119,7 +120,7 @@ class LoDoPaBDataset(Dataset):
         measured_photons = torch.clamp(measured_photons, min=1.0)
 
         # Convert back to log domain (using Beer–Lambert Law)
-        noisy_sinogram = measured_photons + sinogram           # -torch.log(measured_photons / self.i_0)
+        noisy_sinogram = -torch.log(measured_photons / self.i_0)
 
         # Adding gaussian noise (detector's imperfections)
         gaussian_noise = torch.normal(mean=0, std=self.sigma, size=sinogram.shape, dtype=sinogram.dtype, device=sinogram.device) 
@@ -228,8 +229,16 @@ class LoDoPaBDataset(Dataset):
         # Get image
         sample_slice = self._get_image_from_file(idx)
 
+        #normalise the image into a physical interval
+        sample_slice = sample_slice / sample_slice.max()  
+        sample_slice = sample_slice * self.alpha
+
         # Tranform the image to sinogram (it is already a Pytorch tensor)
         sinogram = self.A(sample_slice)
+    
+
+        if self.debug:
+          print(f"[Sinogram] Sinogram - min: {sinogram.min().item():.4f}, max: {sinogram.max().item():.4f}, mean: {sinogram.mean().item():.4f}, std: {sinogram.std().item():.4f}")
 
         # Add nose to sinogram
         noisy_sinogram = self.noise(sinogram)
@@ -246,12 +255,3 @@ class LoDoPaBDataset(Dataset):
         'sinogram': sinogram, 
         'noisy_sinogram':noisy_sinogram, 
         'single_back_projections': single_back_projections}
-
-
-
-#Backprojecting sinogram to check that I can get the same image
-#back_projection = self.A.T(sinogram)
-
-# Print the shape of the back_projection
-#if self.debug == 1:
-#    print("back_projection shape:", back_projection.shape)

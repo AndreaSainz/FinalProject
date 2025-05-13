@@ -43,7 +43,7 @@ class ModelBase(Module):
         debug (bool): Whether to print debug information.
     """
 
-    def __init__(self, training_path, validation_path, test_path, model_path, model_type, n_single_BP, i_0, sigma, batch_size, epochs, optimizer_type, loss_type,learning_rate, seed, debug, log_file='training.log'):
+    def __init__(self, training_path, validation_path, test_path, model_path, model_type, n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type,learning_rate, seed, debug, log_file='training.log'):
 
         self.training_path = training_path
         self.validation_path = validation_path
@@ -51,6 +51,7 @@ class ModelBase(Module):
         self.model_path = model_path
         self.model_type = model_type
         self.n_single_BP = n_single_BP
+        self.alpha = alpha
         self.i_0 = i_0
         self.sigma = sigma
         self.batch_size = batch_size
@@ -111,8 +112,8 @@ class ModelBase(Module):
             tuple: (train_dataloader, val_dataloader)
         """
         # load training and validation datasets
-        train_data = LoDoPaBDataset(self.training_path, self.n_single_BP, self.i_0, self.sigma, self.seed, self.debug)
-        val_data = LoDoPaBDataset(self.validation_path, self.n_single_BP, self.i_0, self.sigma, self.seed, self.debug)
+        train_data = LoDoPaBDataset(self.training_path, self.n_single_BP, self.alpha, self.i_0, self.sigma, self.seed, self.debug)
+        val_data = LoDoPaBDataset(self.validation_path, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, self.debug)
 
         # create dataloader for both and a generator for reproducibility
         g = torch.Generator() 
@@ -273,7 +274,7 @@ class ModelBase(Module):
                 assert ground_truth.shape == pred.shape, f"[ERROR] Shape mismatch: predicted {pred.shape}, ground truth {ground_truth.shape}"
 
                 # compute metrics
-                total_psnr += self.compute_psnr(mse_val)
+                total_psnr += self.compute_psnr(mse_val, self.alpha)
                 total_ssim += self.compute_ssim(pred, ground_truth)
         
         return total_val_loss, total_psnr, total_ssim
@@ -294,6 +295,7 @@ class ModelBase(Module):
             tuple: (history, model)
         """
         return self.training_model(model, patience, confirm_train)
+        
 
     def training_model(self, model, patience, confirm_train=True):
         """
@@ -425,7 +427,7 @@ class ModelBase(Module):
         self._set_seed()
 
         # Load test dataset
-        test_data = LoDoPaBDataset(self.test_path, self.n_single_BP, self.i_0, self.sigma, self.seed, self.debug)
+        test_data = LoDoPaBDataset(self.test_path, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, self.debug)
         test_dataloader = DataLoader(test_data, self.batch_size)
 
         # Move model to device
@@ -469,7 +471,7 @@ class ModelBase(Module):
                 predictions.append(pred)
 
                 # compute metrics
-                total_psnr += self.compute_psnr(mse_val)
+                total_psnr += self.compute_psnr(mse_val, self.alpha)
                 total_ssim += self.compute_ssim(pred, ground_truth)
         
 
@@ -650,8 +652,3 @@ class ModelBase(Module):
                 
         else:
             self._log(f"This model is not trained yet.",  level='warning')
-
-
-
-
-

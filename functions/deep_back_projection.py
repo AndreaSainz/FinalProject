@@ -35,23 +35,20 @@ class DBP(ModelBase):
     """
 
 
-    def __init__(self, in_channels,
-                 training_path, validation_path, test_path, model_path,
-                 n_single_BP, i_0, sigma, batch_size, epochs,
-                 optimizer_type, loss_type, learning_rate, seed, debug):
+    def __init__(self, in_channels, training_path, validation_path, test_path, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, seed, debug, log_file):
         
         # Initialize the base training infrastructure
-        super().__init__(training_path, validation_path, test_path, model_path,
-                         n_single_BP, i_0, sigma, batch_size, epochs,
-                         optimizer_type, loss_type, learning_rate, seed, debug)
+        super().__init__(training_path, validation_path, test_path, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, seed, debug, log_file)
         
-        # Define the architecture
+        # initial layer
         self.conv1 = self.initial_layer(in_channels=in_channels, out_channels=64, kernel_size=3, stride=1, padding=1)
 
+        # middel layer (15 equal layers)
         self.middle_blocks = ModuleList([
             self.conv_block(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1) 
             for _ in range(15)])
 
+        # last layer
         self.final = self.final_layer(in_channels=64, out_channels=1, kernel_size=3, stride=1, padding=1)
 
 
@@ -63,7 +60,6 @@ class DBP(ModelBase):
         Returns:
             Sequential: Sequential model with Conv2d + ReLU.
         """
-
        initial = Sequential(
                     Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding),
                     ReLU(inplace=True))
@@ -78,7 +74,6 @@ class DBP(ModelBase):
         Returns:
             Sequential: Sequential model with Conv2d + BatchNorm2d + ReLU.
         """
-
        convolution = Sequential(
                     Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding),
                     BatchNorm2d(out_channels),
@@ -93,8 +88,7 @@ class DBP(ModelBase):
         
         Returns:
             Conv2d: Output Conv2d layer.
-    """
-
+        """
        final = Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
        return final
 
@@ -113,6 +107,3 @@ class DBP(ModelBase):
         final_layer = self.final(middle)
 
         return final_layer
-
-
-

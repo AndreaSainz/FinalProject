@@ -31,7 +31,7 @@ class LoDoPaBDataset(Dataset):
         self.src_orig_dist = 575
         self.src_det_dist = 1050
         self.slices_per_file = 128
-        self.n_single_BP = n_single_BP
+        self.n_single_BP = int(n_single_BP)
         self.alpha = alpha
         
 
@@ -157,6 +157,8 @@ class LoDoPaBDataset(Dataset):
         else:
             with h5py.File(file_path, 'r') as f:
                 ground_truth = f['data'][:]
+
+                
 
         # Convert to tensor
         sample = torch.tensor(ground_truth, dtype=torch.float32)

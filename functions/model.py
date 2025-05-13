@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import logging
 import math
 from pytorch_msssim import ssim
+from accelerate import Accelerator
 
 class ModelBase(Module):
     """
@@ -43,8 +44,8 @@ class ModelBase(Module):
         debug (bool): Whether to print debug information.
     """
 
-    def __init__(self, training_path, validation_path, test_path, model_path, model_type, n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type,learning_rate, seed, debug, log_file='training.log'):
-
+    def __init__(self, training_path, validation_path, test_path, model_path, model_type, n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type,learning_rate, debug, seed, log_file='training.log'):
+        super().__init__()
         self.training_path = training_path
         self.validation_path = validation_path
         self.test_path = test_path
@@ -65,7 +66,11 @@ class ModelBase(Module):
         self.optimizer = None
         self.loss_fn = None
 
+        # accelerator for faster code
+        self.accelerator = Accelerator()
+
         # logger configuration
+        self.logger = logging.getLogger(__name__)
         if not self.logger.hasHandlers():
             logging.basicConfig(
                 level=logging.INFO, 
@@ -76,10 +81,10 @@ class ModelBase(Module):
                 format='%(asctime)s | %(levelname)s | %(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S'
             )
-        self.logger = logging.getLogger(__name__)
-
+        
         # set the device once for the whole class
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = self.accelerator.device
 
 
 
@@ -111,15 +116,34 @@ class ModelBase(Module):
         Returns:
             tuple: (train_dataloader, val_dataloader)
         """
+        is_gcs = self.training_path.startswith("gs://")
+
         # load training and validation datasets
-        train_data = LoDoPaBDataset(self.training_path, self.n_single_BP, self.alpha, self.i_0, self.sigma, self.seed, self.debug)
-        val_data = LoDoPaBDataset(self.validation_path, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, self.debug)
+        train_data = LoDoPaBDataset(self.training_path, self.n_single_BP, self.alpha, self.i_0, self.sigma, self.seed, False)
+        val_data = LoDoPaBDataset(self.validation_path, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, False)
 
         # create dataloader for both and a generator for reproducibility
         g = torch.Generator() 
         g.manual_seed(self.seed)
-        train_dataloader = DataLoader(train_data, self.batch_size, shuffle=True, generator=g, worker_init_fn=lambda _: np.random.seed(self.seed))
-        val_dataloader = DataLoader(val_data, self.batch_size) # validation and test do not need shuffle
+        train_dataloader = DataLoader(
+            train_data,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=0 if is_gcs else 4,
+            pin_memory=True,
+            persistent_workers=not is_gcs,
+            generator=g,
+            worker_init_fn=lambda _: np.random.seed(self.seed)
+        )
+
+        val_dataloader = DataLoader(
+            val_data,
+            batch_size=self.batch_size,
+            shuffle=False, # validation and test do not need shuffle
+            num_workers=0 if is_gcs else 4,
+            pin_memory=True,
+            persistent_workers=not is_gcs,
+        ) 
 
         return (train_dataloader, val_dataloader)
             
@@ -208,10 +232,11 @@ class ModelBase(Module):
         total_train_loss = 0
 
         # loop over the training set
-        for (ground_truth, sinogram, noisy_sinogram, single_back_projections) in tqdm(train_dataloader, desc=f"Training Epoch {e+1}"):
+        for batch in tqdm(train_dataloader, desc=f"Training Epoch {e+1}"):
 
             # send the input to the device
-            (ground_truth, single_back_projections) = (ground_truth.to(self.device), single_back_projections.to(self.device))
+            ground_truth = batch["ground_truth"]
+            single_back_projections = batch["single_back_projections"]
 
             # perform a forward pass and calculate the training loss
             pred = model(single_back_projections)
@@ -222,7 +247,7 @@ class ModelBase(Module):
 
             # zero out the gradients, perform the backpropagation step, and update the weights
             opt.zero_grad()
-            loss_value.backward()
+            self.accelerator.backward(loss_value)
             opt.step()
 
             # add the loss to the total training loss so far
@@ -235,7 +260,7 @@ class ModelBase(Module):
 
 
     
-    def validation(self, model, val_dataloader, loss):
+    def validation(self, model, val_dataloader, loss, e):
         """
         Evaluates the model on the validation set and computes PSNR, SSIM, and loss.
 
@@ -243,6 +268,7 @@ class ModelBase(Module):
             model (torch.nn.Module): Model to evaluate.
             val_dataloader (DataLoader): Validation data loader.
             loss (nn.Module): Loss function.
+            e (int): Epoch index for logging.
 
         Returns:
             tuple: Total validation loss, accumulated PSNR, accumulated SSIM.
@@ -260,11 +286,12 @@ class ModelBase(Module):
             total_ssim = 0
 
             # loop over the validation set
-            for (ground_truth, sinogram, noisy_sinogram, single_back_projections) in tqdm(val_dataloader, desc=f"Validation Epoch {e+1}"):
+            for batch in tqdm(val_dataloader, desc=f"Validation Epoch {e+1}"):
 
                 # send the input to the device
-                (ground_truth, single_back_projections) = (ground_truth.to(self.device), single_back_projections.to(self.device))
-
+                ground_truth = batch["ground_truth"]
+                single_back_projections = batch["single_back_projections"]
+            
                 # make the predictions and calculate the validation loss
                 pred = model(single_back_projections)
                 mse_val = loss(pred, ground_truth).item()
@@ -279,25 +306,9 @@ class ModelBase(Module):
         
         return total_val_loss, total_psnr, total_ssim
 
-
-
-
-    def __call__(self, model, patience, confirm_train=True):
-        """
-        Shortcut to call training_model using the instance like a function.
-
-        Args:
-            model (torch.nn.Module): The model to train.
-            patience (int): Early stopping patience.
-            confirm_train (bool): Whether to ask for confirmation before training.
-
-        Returns:
-            tuple: (history, model)
-        """
-        return self.training_model(model, patience, confirm_train)
         
 
-    def training_model(self, model, patience, confirm_train=True):
+    def training_model(self, model, patience, confirm_train=False):
         """
         Full training loop for the model, including early stopping, metric tracking,
         and learning rate scheduling.
@@ -319,9 +330,9 @@ class ModelBase(Module):
         train_dataloader, val_dataloader = self._get_dataloaders()
 
         
-        model = model.to(self.device)
         # show model summary
-        sample = next(iter(train_dataloader))[3]  # single_back_projections
+        model.to(self.device)
+        sample = next(iter(train_dataloader))["single_back_projections"]  # single_back_projections
         summary(model, input_size=tuple(sample.shape[1:]))
 
         # confirmation for the model to be train 
@@ -333,11 +344,15 @@ class ModelBase(Module):
 
         # initialize  optimizer and loss function
         self.setup_optimizer_and_loss(model)
-        opt = self.optimizer
         loss = self.loss_fn
 
+        # accelerates training
+        model, opt, train_dataloader, val_dataloader = self.accelerator.prepare(model, self.optimizer, train_dataloader, val_dataloader)
+        
+
+
         # initialize early stopping
-        early_stopping = EarlyStopping(patience=patience, debug=True, path=f'{self.model_path}_best.pth',  logger=self.logger)
+        early_stopping = EarlyStopping(patience=patience, debug=self.debug, path=f'{self.model_path}_best.pth',  logger=self.logger)
 
         # initialize scheduler for learning rate
         scheduler = ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=5)
@@ -364,7 +379,7 @@ class ModelBase(Module):
 
                 
             # call the validation function
-            total_val_loss, total_psnr, total_ssim = self.validation(model, val_dataloader, loss)
+            total_val_loss, total_psnr, total_ssim = self.validation(model, val_dataloader, loss, e)
 
             
             # update our training history
@@ -427,21 +442,20 @@ class ModelBase(Module):
         self._set_seed()
 
         # Load test dataset
-        test_data = LoDoPaBDataset(self.test_path, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, self.debug)
-        test_dataloader = DataLoader(test_data, self.batch_size)
+        test_data = LoDoPaBDataset(self.test_path, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, False)
+        test_dataloader = DataLoader(test_data, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
-        # Move model to device
-        model = model.to(self.device)
+        # save ground truth and predictions
+        gt_images = []
+        predictions = []
 
+        
         self._log(f"Testing the {self.model_type} model...")
 
         # initialize  optimizer and loss function
         self.setup_optimizer_and_loss(model)
-        loss = self.loss_fn
+        model, loss, test_dataloader = self.accelerator.prepare(model, self.loss_fn, test_dataloader)
 
-        # Save ground truth and predictions
-        gt_images = []
-        predictions = []
 
         # switch off autograd for evaluation
         with torch.no_grad():
@@ -455,24 +469,24 @@ class ModelBase(Module):
             total_ssim = 0
 
             # loop over the validation set
-            for (ground_truth, sinogram, noisy_sinogram, single_back_projections) in tqdm(test_dataloader):
-
-            
+            for batch in tqdm(test_dataloader):
                 # send the input to the device
-                (ground_truth, single_back_projections) = (ground_truth.to(self.device), single_back_projections.to(self.device))
-                gt_images.append(ground_truth)
+                ground_truth = batch['ground_truth']
+                single_back_projections = batch['single_back_projections']
 
                 # make the predictions and calculate the validation loss
                 pred = model(single_back_projections)
                 mse_val = loss(pred, ground_truth).item()
                 total_test_loss += mse_val
 
-                # save predictions
-                predictions.append(pred)
-
                 # compute metrics
                 total_psnr += self.compute_psnr(mse_val, self.alpha)
                 total_ssim += self.compute_ssim(pred, ground_truth)
+
+                # save gound truth and prediction
+                predictions.append(pred.cpu())
+                gt_images.append(ground_truth.cpu())
+                
         
 
         # training history
@@ -480,17 +494,18 @@ class ModelBase(Module):
         avg_psnr = total_psnr / len(test_dataloader)
         avg_ssim = total_ssim / len(test_dataloader)
 
-        # change tensors to list before save them
-        gt_images = [img.cpu().tolist() for img in gt_images]
-        predictions = [p.cpu().tolist() for p in predictions]
 
         results = {
             "test_loss": avg_test_loss,
             "psnr": avg_psnr,
-            "ssim": avg_ssim,
-            "ground_truth": gt_images,
-            "predictions" : predictions
+            "ssim": avg_ssim
         }
+
+        # save predictions and ground truth
+        torch.save(torch.cat(predictions), f"{self.model_path}_predictions_images.pt")
+        torch.save(torch.cat(gt_images), f"{self.model_path}_ground_truth_images.pt")
+        self._log(f"Predictions saved to '{self.model_path}_predictions_images.pt")
+        self._log(f"Predictions saved to '{self.model_path}_ground_truth_images.pt")
 
         # save metrics to file
         with open(f'{self.model_path}_test_metrics.json', 'w') as f:
@@ -522,7 +537,7 @@ class ModelBase(Module):
 
 
     def plot_metric(self, x, y_dict, title, xlabel, ylabel, test_value=None, save_path=None):
-       """
+        """
         Plots metrics over epochs with optional test reference line.
 
         Args:
@@ -549,6 +564,7 @@ class ModelBase(Module):
         if save_path:
             plt.savefig(save_path)
             self._log(f"Saved plot to {save_path}")
+            
         plt.show()
 
 
@@ -563,10 +579,12 @@ class ModelBase(Module):
         """
 
         if self.trained:
-            # handling file path error
+
+            
             if mode == "training":
+                # handling file path error
                 if not os.path.exists(f"{self.model_path}_metrics.json"):
-                    self._log(f"File not found: {f"{self.model_path}_metrics.json"}", level='error')
+                    self._log(f"File not found: {self.model_path}_metrics.json", level='error')
                     return None
                 else:
                     with open(f'{self.model_path}_metrics.json', 'r') as f:
@@ -594,11 +612,17 @@ class ModelBase(Module):
             elif mode == "testing":
                 # handling file path error
                 if not os.path.exists(f"{self.model_path}_test_metrics.json"):
-                    self._log(f"File not found: {f"{self.model_path}_test_metrics.json"}", level='error')
+                    self._log(f"File not found: {self.model_path}_test_metrics.json", level='error')
                     return None
+                elif not os.path.exists(f"{self.model_path}_predictions_images.pt") or not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
+                    self._log("Prediction or ground truth .pt files not found", level="error")
+                    return
+
                 else:
                     with open(f'{self.model_path}_test_metrics.json', 'r') as f:
                         test_results = json.load(f)
+                    predictions = torch.load(f"{self.model_path}_predictions_images.pt")
+                    ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
 
                 #plot results
                 print("\n=== Testing Results ===")
@@ -608,21 +632,21 @@ class ModelBase(Module):
 
                 # get random samples
                 random.seed(self.seed)
-                samples = random.sample(range(0, len(test_results['predictions'])), example_number)
+                samples = random.sample(range(0, len(predictions)), example_number)
 
                 for example in samples:
-                    self.show_example(test_results['predictions'][example], test_results['ground_truth'][example])
+                    self.show_example(predictions[example], ground_truths[example])
 
 
             elif mode == "both":
                 # handling file path error
                 if not os.path.exists(f"{self.model_path}_test_metrics.json"):
                     
-                    self._log(f"File not found: {f"{self.model_path}_test_metrics.json"}", level='error')
+                    self._log(f"File not found: {self.model_path}_test_metrics.json", level='error')
                     return None
 
                 elif not os.path.exists(f"{self.model_path}_metrics.json"):
-                    self._log(f"File not found: {f"{self.model_path}_metrics.json"}", level='error')
+                    self._log(f"File not found: {self.model_path}_metrics.json", level='error')
                     return None
 
                 else:

@@ -51,10 +51,10 @@ A minimal example:
 .. code-block:: python
 
    from ct_reconstruction.datasets import LoDoPaBDataset
-   from ct_reconstruction.models.deep_back_projection import DeepBackProjection
+   from ct_reconstruction.models.deep_back_projection import DBP
 
    dataset = LoDoPaBDataset("path/to/data")
-   model = DeepBackProjection()
+   model = DBP()
    # Train, evaluate, or visualize...
 
 

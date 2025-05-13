@@ -1,9 +1,32 @@
-Dual Module
-===========
-The `dual` module provides the core attributes and operations for dual numbers.
+Utility Functions for CT Reconstruction
+=======================================
 
-.. automodule:: ct_reconstruction.utils
+This module provides utility functions for evaluating and visualizing CT image reconstruction performance.
+
+Included functions:
+- `compute_psnr`: Calculates Peak Signal-to-Noise Ratio.
+- `compute_ssim`: Computes Structural Similarity Index.
+- `plot_metric`: Plots training/validation metrics over epochs.
+- `show_example`: Displays reconstructed vs ground truth images.
+
+How to Import:
+--------------
+After installing the `ct_reconstruction` package, you can import the utilities as:
+
+.. code-block:: python
+
+    from ct_reconstruction.utils.metrics import compute_psnr, compute_ssim
+    from ct_reconstruction.utils.plotting import show_example, plot_metric
+
+API Reference:
+--------------
+
+.. automodule:: ct_reconstruction.utils.metrics
     :members:
     :undoc-members:
-    :special-members: __repr__, __eq__,__lt__,__le__,__gt__,__ge__,__add__,__radd__,__sub__,__rsub__,__mul__,__rmul__,__pow__,__rpow__,__truediv__,__rtruediv__,__array_ufunc__
+    :show-inheritance:
+
+.. automodule:: ct_reconstruction.utils.plotting
+    :members:
+    :undoc-members:
     :show-inheritance:

@@ -1,17 +1,26 @@
-CLI Module
-==========
+LoDoPaBDataset Class
+=====================
 
-This notebook illustrates the functionality of the `dual_autodiff` command-line interface (CLI) commands 
-by invoking them as shell commands using `!` in Jupyter Notebook. 
+Provides a custom PyTorch `Dataset` for loading and preprocessing CT images from the LoDoPaB-CT dataset.
 
-It is essential to ensure that the `dual_autodiff` package is correctly installed and accessible as a CLI tool. 
-The commands will then be explored in a step-by-step manner.
+This class loads HDF5 files, simulates realistic noisy sinograms, and generates input-output 
+pairs for supervised deep learning tasks in CT reconstruction. It supports:
+- Gaussian and Poisson noise simulation,
+- generation of single-angle backprojections,
+- automatic filtering of invalid samples.
 
+How to Import:
+--------------
+After installing the `ct_reconstruction` package, you can import the class as:
 
+.. code-block:: python
 
+    from ct_reconstruction.datasets.dataset import LoDoPaBDataset
 
-.. toctree:: 
-   :maxdepth: 0
-   :caption: Contents:
+API Reference:
+--------------
 
-   notebooks/cli
+.. automodule:: ct_reconstruction.datasets.dataset
+    :members:
+    :undoc-members:
+    :show-inheritance:

@@ -16,7 +16,6 @@ release = '0.1.0-beta'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-	'nbsphinx',
     'myst_parser',
     'sphinx.ext.autodoc',    # Autodoc extension for extracting docstrings
 	'sphinx.ext.mathjax',

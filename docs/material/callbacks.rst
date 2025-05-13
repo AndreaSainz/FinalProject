@@ -1,22 +1,24 @@
-Dual's List operations
-========================
+EarlyStopping Callback
+=======================
 
-Applies a specified function to a list of dual numbers.
+Implements early stopping during training to avoid overfitting.
 
-This function simplifies the application of operations (e.g., `sin`, `cos`, addition) to lists of `Dual` numbers. 
-It supports both element-wise operations on a single list and operations between two lists.
+This class monitors validation loss and stops training when the performance does not improve
+after a given number of epochs (patience). It is typically used in deep learning pipelines.
 
 How to Import:
 --------------
-After installing the `dual_autodiff` package, you can import the function as:
+After installing the `ct_reconstruction` package, you can import the class as:
 
 .. code-block:: python
 
-    from dual_autodiff.dual_autodiff_tools import apply_function_to_list
+    from ct_reconstruction.callbacks.early_stopping import EarlyStopping
 
 
+API Reference:
+--------------
 
-.. automodule:: ct_reconstruction.callbacks
+.. automodule:: ct_reconstruction.callbacks.early_stopping
     :members:
     :undoc-members:
     :show-inheritance:

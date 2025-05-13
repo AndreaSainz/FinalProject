@@ -210,10 +210,6 @@ class ModelBase(Module):
         return total_train_loss
 
 
-
-
-
-    
     def validation(self, model, val_dataloader, loss, e):
         """
         Evaluates the model on the validation set and computes PSNR, SSIM, and loss.

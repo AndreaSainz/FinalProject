@@ -3,8 +3,10 @@ from torch.nn import Module
 from torch.nn import MSELoss
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from functions.dataset import LoDoPaBDataset
-from functions.early_stopping import EarlyStopping
+from ..datasets.dataset import LoDoPaBDataset
+from ..callbacks.early_stopping import EarlyStopping
+from ..utils.metrics import compute_psnr, compute_ssim
+from ..utils.plotting import show_example, plot_metric
 from torch.utils.data import DataLoader
 import time
 from tqdm import tqdm
@@ -14,8 +16,6 @@ import numpy as np
 from torchsummary import summary
 import matplotlib.pyplot as plt
 import logging
-import math
-from pytorch_msssim import ssim
 from accelerate import Accelerator
 
 class ModelBase(Module):
@@ -150,52 +150,6 @@ class ModelBase(Module):
 
 
 
-
-    @staticmethod
-    def compute_psnr(mse, max_val=1.0):
-        """
-        Computes the Peak Signal-to-Noise Ratio (PSNR) between two images.
-
-        Args:
-            mse (torch.Tensor or float): The mean squared error between reconstructed and reference images.
-            max_val (float, optional): The maximum possible pixel value of the images (default: 1.0).
-
-        Returns:
-            float: PSNR value in decibels (dB). Returns infinity if MSE is zero.
-        """
-        # if mse is a tensor, extract the value
-        if isinstance(mse, torch.Tensor):
-            mse = mse.item()
-        
-        # if MSE is zero, return infinite PSNR (perfect match)
-        if mse == 0:
-            return float('inf')
-        
-        # calculate PSNR using the standard formula
-        psnr = 10 * math.log10(max_val ** 2 / mse)
-
-        return psnr
-
-
-
-
-
-    @staticmethod
-    def compute_ssim(reconstructed, reference):
-        """
-        Computes the Structural Similarity Index (SSIM) between two images.
-
-        Args:
-            reconstructed (torch.Tensor): The reconstructed or predicted image tensor with shape [Batch size, Channels, Height, Weight].
-            reference (torch.Tensor): The ground truth or reference image tensor with shape [B, C, H, W].
-
-        Returns:
-            float: SSIM value between -1 and 1, where 1 means perfect similarity.
-        """
-        # both inputs must be shape [B, C, H, W]
-        return ssim(reconstructed, reference).item()
-
-
     def setup_optimizer_and_loss(self, model):
         """Initialize optimizer and loss function based on config strings."""
         if self.optimizer_type == "Adam":
@@ -232,7 +186,7 @@ class ModelBase(Module):
         total_train_loss = 0
 
         # loop over the training set
-        for batch in tqdm(train_dataloader, desc=f"Training Epoch {e+1}"):
+        for batch in train_dataloader:
 
             # send the input to the device
             ground_truth = batch["ground_truth"]
@@ -286,7 +240,7 @@ class ModelBase(Module):
             total_ssim = 0
 
             # loop over the validation set
-            for batch in tqdm(val_dataloader, desc=f"Validation Epoch {e+1}"):
+            for batch in tqdm(val_dataloader, desc=f"Validation Epoch {e+1}", , leave=False):
 
                 # send the input to the device
                 ground_truth = batch["ground_truth"]
@@ -518,56 +472,6 @@ class ModelBase(Module):
 
 
 
-    @staticmethod
-    def show_example(output_img, ground_truth):
-        """
-        Display side-by-side images of the output and ground truth.
-
-        Args:
-            output_img (torch.Tensor): Model output image.
-            ground_truth (torch.Tensor): Ground truth image.
-        """
-
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-        axes[0].imshow(output_img.squeeze().cpu(), cmap='gray')
-        axes[0].set_title('Reconstruction')
-        axes[1].imshow(ground_truth.squeeze().cpu(), cmap='gray')
-        axes[1].set_title('Ground Truth')
-        plt.show()
-
-
-    def plot_metric(self, x, y_dict, title, xlabel, ylabel, test_value=None, save_path=None):
-        """
-        Plots metrics over epochs with optional test reference line.
-
-        Args:
-            x (list or range): X-axis values (e.g., epochs).
-            y_dict (dict): Dictionary with keys as labels and values as lists of y-values.
-            title (str): Title of the plot.
-            xlabel (str): Label for the x-axis.
-            ylabel (str): Label for the y-axis.
-            test_value (float, optional): Value to draw a horizontal reference line.
-            save_path (str, optional): If provided, saves the plot to this path.
-        """
-        plt.figure()
-        for label, y in y_dict.items():
-            plt.plot(x, y, label=label)
-
-        if test_value is not None:
-            plt.axhline(y=test_value, color='red', linestyle='--', label='Test')
-
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-        plt.title(title)
-        plt.legend()
-
-        if save_path:
-            plt.savefig(save_path)
-            self._log(f"Saved plot to {save_path}")
-            
-        plt.show()
-
-
 
     def results(self, mode, example_number, save_path=None):
         """
@@ -595,17 +499,20 @@ class ModelBase(Module):
 
                 #plot Loss
                 loss_dict = {'Train Loss': history['train_loss'], 'Val Loss': history['val_loss']}
-                self.plot_metric(epochs,loss_dict, title='Loss over Epochs', xlabel='Epoch', ylabel='Loss', test_value=None, save_path=save_path )
+                plot_metric(epochs,loss_dict, title='Loss over Epochs', xlabel='Epoch', ylabel='Loss', test_value=None, save_path=f"{save_path}_training_loss.png" )
+                self._log(f"Saved plot to {save_path}_training_loss.png")
                 
 
                 # plot PSNR
                 psnr_dict = {'PSNR metric':  history['psnr']}
-                self.plot_metric(epochs, psnr_dict, 'Validation PSNR over Epochs', 'Epoch', 'PSNR (dB)', test_value=None, save_path=save_path)
+                plot_metric(epochs, psnr_dict, 'Validation PSNR over Epochs', 'Epoch', 'PSNR (dB)', test_value=None, save_path=f"{save_path}_training_psnr.png")
+                self._log(f"Saved plot to {save_path}_training_psnr.png")
                 
 
                 # plot SSIM
                 ssim_dict = {'SSIM metric':  history['ssim']}
-                self.plot_metric(epochs, ssim_dict, 'Validation SSIM over Epochs', 'Epoch', 'SSIM', test_value=None, save_path=save_path)
+                plot_metric(epochs, ssim_dict, 'Validation SSIM over Epochs', 'Epoch', 'SSIM', test_value=None, save_path=f"{save_path}_training_ssim.png")
+                self._log(f"Saved plot to {save_path}_training_ssim.png")
             
 
 
@@ -636,6 +543,7 @@ class ModelBase(Module):
 
                 for example in samples:
                     self.show_example(predictions[example], ground_truths[example])
+                    
 
 
             elif mode == "both":
@@ -661,18 +569,18 @@ class ModelBase(Module):
 
                 # plot Loss
                 loss_dict = {'Train Loss': history['train_loss'], 'Val Loss': history['val_loss']}
-                self.plot_metric(epochs,loss_dict, title='Loss over Epochs', xlabel='Epoch', ylabel='Loss', test_value=test_results['test_loss'], save_path=save_path )
-                
+                plot_metric(epochs,loss_dict, title='Loss over Epochs', xlabel='Epoch', ylabel='Loss', test_value=test_results['test_loss'], save_path=f"{save_path}_train_test_loss.png")
+                self._log(f"Saved plot to {save_path}_train_test_loss")
 
                 # plot PSNR
                 psnr_dict = {'Val PSNR': history['psnr']}
-                self.plot_metric(epochs, psnr_dict, title='PSNR over Epochs', xlabel='Epoch', ylabel='PSNR (dB)', test_value=test_results['psnr'], save_path=save_path )
-                
+                plot_metric(epochs, psnr_dict, title='PSNR over Epochs', xlabel='Epoch', ylabel='PSNR (dB)', test_value=test_results['psnr'], save_path=f"{save_path}_train_test_psnr.png" )
+                self._log(f"Saved plot to {save_path}_train_test_psnr.png")
 
                 # plot SSIM
                 ssim_dict = {'Val SSIM': history['ssim']}
-                self.plot_metric(epochs, ssim_dict, title='SSIM over Epochs', xlabel='Epoch', ylabel='SSIM', test_value=test_results['ssim'], save_path=save_path )
-
+                plot_metric(epochs, ssim_dict, title='SSIM over Epochs', xlabel='Epoch', ylabel='SSIM', test_value=test_results['ssim'], save_path=f"{save_path}_train_test_ssim.png" )
+                self._log(f"Saved plot to {save_path}_train_test_ssim.png")
                 
         else:
             self._log(f"This model is not trained yet.",  level='warning')

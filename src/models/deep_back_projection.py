@@ -8,7 +8,7 @@ from torch.nn import Sequential
 from torch.nn import MSELoss
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from functions.dataset import LoDoPaBDataset
+from ..datasets.dataset import LoDoPaBDataset
 from functions.early_stopping import EarlyStopping
 from torch.utils.data import DataLoader
 import time

@@ -14,20 +14,25 @@ def configure_logger(name, log_file, debug= False) :
         """
         logger = logging.getLogger(name)
         logger.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(name)s | %(message)s',
-                                    datefmt='%Y-%m-%d %H:%M:%S')
 
         # Avoid duplicate handlers
         if not logger.handlers:
-            # File handler (always)
-            fh = logging.FileHandler(log_file, mode='w')
-            fh.setFormatter(formatter)
-            logger.addHandler(fh)
+            formatter = logging.Formatter(
+                '%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
 
-            # Console handler (only if debug)
+            # File handler (always)
+            file_handler = logging.FileHandler(log_file, mode='a')  # append
+            file_handler.setLevel(logging.INFO)
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+
+            # Stream handler (only if debug is True)
             if debug:
-                sh = logging.StreamHandler()
-                sh.setFormatter(formatter)
-                logger.addHandler(sh)
+                stream_handler = logging.StreamHandler()
+                stream_handler.setLevel(logging.INFO)
+                stream_handler.setFormatter(formatter)
+                logger.addHandler(stream_handler)
 
         return logger

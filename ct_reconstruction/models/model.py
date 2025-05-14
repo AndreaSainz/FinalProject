@@ -91,6 +91,7 @@ class ModelBase(Module):
 
         # logger configuration
         self.logger = configure_logger("ct_reconstruction.models.model", log_file, debug=self.debug)
+        self.dataset_logger = configure_logger("ct_reconstruction.dataset", log_file, debug=False)
         
         # set the device once for the whole class
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -156,7 +157,7 @@ class ModelBase(Module):
             self.seed,
             self.max_len, 
             False,
-            self.logger)
+            self.dataset_logger)
 
         val_data = LoDoPaBDataset(self.validation_path, 
             self.vg, 
@@ -170,7 +171,7 @@ class ModelBase(Module):
             self.seed, 
             self.max_len, 
             False, 
-            self.logger)
+            self.dataset_logger)
 
         # create dataloader for both and a generator for reproducibility
         g = torch.Generator() 
@@ -458,7 +459,7 @@ class ModelBase(Module):
         self.seed, 
         self.max_len, 
         False, 
-        self.logger)
+        self.dataset_logger)
 
         test_dataloader = DataLoader(test_data, 
         batch_size=self.batch_size, 

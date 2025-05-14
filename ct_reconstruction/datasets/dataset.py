@@ -1,5 +1,6 @@
 import os
 from torch.utils.data import Dataset
+from ..utils.loggers import configure_logger
 import tomosipo as ts
 import h5py
 import torch
@@ -45,8 +46,9 @@ class LoDoPaBDataset(Dataset):
 
         # Debug parameter
         self.debug = debug
-        self.logger = logger or logging.getLogger(__name__)
-        self.max_len = max_len  # Optional limit on number of samples
+        self.logger = (logger.getChild("dataset") if logger else logging.getLogger(__name__ + ".dataset")) 
+        self.logger.propagate = False  # prevents logs from being sent to the parent logger
+        self.max_len = max_len  
 
         
 

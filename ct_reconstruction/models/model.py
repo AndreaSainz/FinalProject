@@ -44,8 +44,24 @@ class ModelBase(Module):
         debug (bool): Whether to print debug information.
     """
 
-    def __init__(self, training_path, validation_path, test_path, model_path, model_type, n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type,learning_rate, debug, seed, log_file='training.log'):
+    def __init__(self, training_path, validation_path, test_path, model_path, model_type, n_single_BP, alpha, i_0, sigma, max_len, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, log_file='training.log'):
         super().__init__()
+
+        #Scan parameters from the paper and data
+        self.pixels = 362               # Image resolution of 362x362 pixels on a domain size of 26x26 cm
+        self.num_angles = 1000
+        self.num_detectors = 513        # 513 equidistant detector bins s spanning the image diameter.
+        self.src_orig_dist = 575
+        self.src_det_dist = 1050
+
+        # Create tomosipo volume and projection geometry
+        self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
+        self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
+        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
+        self.A = ts.operator(self.vg,self.pg)  
+                                                                              # Operator
+
+
         self.training_path = training_path
         self.validation_path = validation_path
         self.test_path = test_path
@@ -55,6 +71,7 @@ class ModelBase(Module):
         self.alpha = alpha
         self.i_0 = i_0
         self.sigma = sigma
+        self.max_len = max_len
         self.batch_size = batch_size
         self.epochs = epochs
         self.learning_rate = learning_rate
@@ -87,6 +104,7 @@ class ModelBase(Module):
         self.device = self.accelerator.device
 
 
+        
 
     def _set_seed(self):
         """
@@ -118,9 +136,10 @@ class ModelBase(Module):
         """
         is_gcs = self.training_path.startswith("gs://")
 
+        
         # load training and validation datasets
-        train_data = LoDoPaBDataset(self.training_path, self.n_single_BP, self.alpha, self.i_0, self.sigma, self.seed, False)
-        val_data = LoDoPaBDataset(self.validation_path, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, False)
+        train_data = LoDoPaBDataset(self.training_path, self.vg, self.angles, self.pg, self.A, self.n_single_BP, self.alpha, self.i_0, self.sigma, self.seed, self.max_len, False)
+        val_data = LoDoPaBDataset(self.validation_path, self.vg, self.angles, self.pg, self.A, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, self.max_len, False)
 
         # create dataloader for both and a generator for reproducibility
         g = torch.Generator() 
@@ -236,7 +255,7 @@ class ModelBase(Module):
             total_ssim = 0
 
             # loop over the validation set
-            for batch in tqdm(val_dataloader, desc=f"Validation Epoch {e+1}", , leave=False):
+            for batch in tqdm(val_dataloader, desc=f"Validation Epoch {e+1}", leave=False):
 
                 # send the input to the device
                 ground_truth = batch["ground_truth"]
@@ -392,7 +411,7 @@ class ModelBase(Module):
         self._set_seed()
 
         # Load test dataset
-        test_data = LoDoPaBDataset(self.test_path, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, False)
+        test_data = LoDoPaBDataset(self.test_path, self.vg, self.angles, self.pg, self.A, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, self.max_len, False)
         test_dataloader = DataLoader(test_data, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
         # save ground truth and predictions

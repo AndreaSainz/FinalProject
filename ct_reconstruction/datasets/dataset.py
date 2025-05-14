@@ -5,6 +5,7 @@ import h5py
 import torch
 import numpy as np
 import gcsfs
+import math
 
 class LoDoPaBDataset(Dataset):
 
@@ -18,11 +19,12 @@ class LoDoPaBDataset(Dataset):
         i_0 (float): Incident X-ray photon count (controls Poisson noise).
         sigma (float): Standard deviation of additive Gaussian noise.
         seed (int): Random seed for reproducibility.
+        max_len : 
         debug (bool): If True, prints debug information during execution.
     """
 
 
-    def __init__(self, ground_truth_dir, n_single_BP= 16, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, debug = False):
+    def __init__(self, ground_truth_dir, vg, angles, pg, A, n_single_BP= 16, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False):
         
         #Scan parameters from the paper and data
         self.pixels = 362               # Image resolution of 362x362 pixels on a domain size of 26x26 cm
@@ -43,13 +45,14 @@ class LoDoPaBDataset(Dataset):
 
         # Debug parameter
         self.debug = debug
+        self.max_len = max_len  # Optional limit on number of samples
 
 
-        # Create tomosipo volume and projection geometry
-        self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
-        self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
-        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
-        self.A = ts.operator(self.vg,self.pg)                                                                        # Operator
+        # tomosipo volume and projection geometry
+        self.vg = vg                                                     
+        self.angles = angles 
+        self.pg = pg 
+        self.A = A 
 
 
         # Select subset of angles for sparse-view backprojection
@@ -77,6 +80,12 @@ class LoDoPaBDataset(Dataset):
             raise ValueError(f"No HDF5 files found in directory: {self.ground_truth_dir}")
 
 
+        # determine how many files I need to cover max_len 
+        if self.max_len is not None:
+            required_files = math.ceil(self.max_len / self.slices_per_file)
+            self.files = self.files[:required_files]
+
+
         if self.debug:
             print(f"[Dataset] Using directory: {self.ground_truth_dir}")
             print(f"[Dataset] Found {len(self.files)} files.")
@@ -84,8 +93,10 @@ class LoDoPaBDataset(Dataset):
 
 
     def __len__(self):
-        """Return the total number of samples in the dataset"""
-        return len(self.files)*128 # there are 128 images per patient
+        """Return the number of samples in the dataset that are going to be used"""
+        total = len(self.files) * self.slices_per_file  
+        return min(total, self.max_len) if self.max_len is not None else total
+
 
 
 
@@ -94,7 +105,6 @@ class LoDoPaBDataset(Dataset):
                 f"n_single_BP={self.n_single_BP}, "
                 f"noise=Poisson+Gaussian(σ={self.sigma}), "
                 f"i_0={self.i_0})")
-
 
 
     def noise(self, sinogram):
@@ -227,6 +237,10 @@ class LoDoPaBDataset(Dataset):
                 'single_back_projections': [n_single_BP, H, W]
             }
         """
+
+        #checking the index when I do not want all the files
+        if self.max_len is not None and idx >= self.max_len:
+            raise IndexError(f"Index {idx} out of range for max_len={self.max_len}")
 
         # Get image
         sample_slice = self._get_image_from_file(idx)

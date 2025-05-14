@@ -60,18 +60,19 @@ class ModelBase(Module):
         self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
         self.A = ts.operator(self.vg,self.pg)  
                                                                               # Operator
-
-
+        # dataset parameters
         self.training_path = training_path
         self.validation_path = validation_path
         self.test_path = test_path
-        self.model_path = model_path
-        self.model_type = model_type
         self.n_single_BP = n_single_BP
         self.alpha = alpha
         self.i_0 = i_0
         self.sigma = sigma
         self.max_len = max_len
+
+        # model parameters
+        self.model_path = model_path
+        self.model_type = model_type
         self.batch_size = batch_size
         self.epochs = epochs
         self.learning_rate = learning_rate

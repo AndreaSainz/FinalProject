@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 def show_example(output_img, ground_truth):
         """
         Display side-by-side images of the output and ground truth.
@@ -12,6 +14,7 @@ def show_example(output_img, ground_truth):
         axes[0].set_title('Reconstruction')
         axes[1].imshow(ground_truth.squeeze().cpu(), cmap='gray')
         axes[1].set_title('Ground Truth')
+        plt.tight_layout()
         plt.show()
 
 
@@ -42,5 +45,6 @@ def plot_metric(x, y_dict, title, xlabel, ylabel, test_value=None, save_path=Non
 
         if save_path:
             plt.savefig(save_path)
-            
+        
+        plt.tight_layout()
         plt.show()

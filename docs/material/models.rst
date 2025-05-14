@@ -4,8 +4,9 @@ Model Architectures and Training Base
 This module includes the core model architecture and the base class for training deep learning models for CT reconstruction.
 
 Included components:
-- `ModelBase`: A reusable base class that handles training, validation, testing, and metric logging.
-- `DBP`: Deep Back Projection model for CT image reconstruction.
+
+- ``ModelBase``: A reusable base class that handles training, validation, testing, and metric logging.
+- ``DBP``: Deep Back Projection model for CT image reconstruction.
 
 How to Import:
 --------------

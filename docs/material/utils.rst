@@ -4,10 +4,11 @@ Utility Functions for CT Reconstruction
 This module provides utility functions for evaluating and visualizing CT image reconstruction performance.
 
 Included functions:
-- `compute_psnr`: Calculates Peak Signal-to-Noise Ratio.
-- `compute_ssim`: Computes Structural Similarity Index.
-- `plot_metric`: Plots training/validation metrics over epochs.
-- `show_example`: Displays reconstructed vs ground truth images.
+
+- ``compute_psnr``: Calculates Peak Signal-to-Noise Ratio.
+- ``compute_ssim``: Computes Structural Similarity Index.
+- ``plot_metric``: Plots training/validation metrics over epochs.
+- ``show_example``: Displays reconstructed vs ground truth images.
 
 How to Import:
 --------------

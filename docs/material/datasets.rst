@@ -5,9 +5,10 @@ Provides a custom PyTorch `Dataset` for loading and preprocessing CT images from
 
 This class loads HDF5 files, simulates realistic noisy sinograms, and generates input-output 
 pairs for supervised deep learning tasks in CT reconstruction. It supports:
-- Gaussian and Poisson noise simulation,
-- generation of single-angle backprojections,
-- automatic filtering of invalid samples.
+
+- **Gaussian and Poisson noise simulation** — for realistic data.
+- **Single-angle backprojection generation** — useful for low-dose CT reconstruction.
+- **Invalid sample filtering** — ensures only valid training data is used.
 
 How to Import:
 --------------

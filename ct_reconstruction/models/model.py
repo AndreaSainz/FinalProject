@@ -1,12 +1,14 @@
+import tomosipo as ts
 import torch
 from torch.nn import Module
 from torch.nn import MSELoss
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ..datasets.dataset import LoDoPaBDataset
 from ..callbacks.early_stopping import EarlyStopping
 from ..utils.metrics import compute_psnr, compute_ssim
 from ..utils.plotting import show_example, plot_metric
+from ..utils.loggers import configure_logger
 from torch.utils.data import DataLoader
 import time
 from tqdm import tqdm
@@ -58,8 +60,8 @@ class ModelBase(Module):
         self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
         self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
         self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
-        self.A = ts.operator(self.vg,self.pg)  
-                                                                              # Operator
+        self.A = ts.operator(self.vg,self.pg)                                                                        # Operator
+                                                                              
         # dataset parameters
         self.training_path = training_path
         self.validation_path = validation_path
@@ -88,22 +90,14 @@ class ModelBase(Module):
         self.accelerator = Accelerator()
 
         # logger configuration
-        self.logger = logging.getLogger(__name__)
-        if not self.logger.hasHandlers():
-            logging.basicConfig(
-                level=logging.INFO, 
-                handlers=[
-                    logging.FileHandler(log_file),
-                    logging.StreamHandler()
-                ],
-                format='%(asctime)s | %(levelname)s | %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
-            )
+        self.logger = configure_logger("ct_reconstruction.models.model", log_file, debug=self.debug)
         
         # set the device once for the whole class
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = self.accelerator.device
 
+
+    
 
         
 
@@ -120,11 +114,22 @@ class ModelBase(Module):
         torch.backends.cudnn.benchmark = False
     
 
+
     def _log(self, msg, level='info'):
+        """
+        Logs a message to the logger with the specified level.
 
-        if self.debug and hasattr(self.logger, level):
-            getattr(self.logger, level)(msg)
+        Always logs to the file, and optionally prints to console if self.debug is True.
+        Uses the logging level (e.g., 'info', 'warning', 'error') to determine severity.
 
+        Args:
+            msg (str): The message to log.
+            level (str): Logging level (default is 'info'). Can be 'debug', 'info', 'warning', 'error', or 'critical'.
+        """
+        # Get the logging method based on the provided level (defaults to .info)
+        level_func = getattr(self.logger, level.lower(), self.logger.info)
+        # Call the logging method with the message
+        level_func(msg)
 
 
 
@@ -139,8 +144,33 @@ class ModelBase(Module):
 
         
         # load training and validation datasets
-        train_data = LoDoPaBDataset(self.training_path, self.vg, self.angles, self.pg, self.A, self.n_single_BP, self.alpha, self.i_0, self.sigma, self.seed, self.max_len, False)
-        val_data = LoDoPaBDataset(self.validation_path, self.vg, self.angles, self.pg, self.A, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, self.max_len, False)
+        train_data = LoDoPaBDataset(self.training_path,
+            self.vg,
+            self.angles,
+            self.pg,
+            self.A,
+            self.n_single_BP,
+            self.alpha,
+            self.i_0,
+            self.sigma,
+            self.seed,
+            self.max_len, 
+            False,
+            self.logger)
+
+        val_data = LoDoPaBDataset(self.validation_path, 
+            self.vg, 
+            self.angles, 
+            self.pg, 
+            self.A, 
+            self.n_single_BP, 
+            self.alpha,  
+            self.i_0, 
+            self.sigma, 
+            self.seed, 
+            self.max_len, 
+            False, 
+            self.logger)
 
         # create dataloader for both and a generator for reproducibility
         g = torch.Generator() 
@@ -174,6 +204,9 @@ class ModelBase(Module):
         """Initialize optimizer and loss function based on config strings."""
         if self.optimizer_type == "Adam":
             self.optimizer = Adam(model.parameters(), lr=self.learning_rate)
+
+        elif self.optimizer_type == "AdamW":
+            self.optimizer = AdamW(model.parameters(), lr=self.learning_rate)
         else:
             raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
 
@@ -271,8 +304,8 @@ class ModelBase(Module):
                 assert ground_truth.shape == pred.shape, f"[ERROR] Shape mismatch: predicted {pred.shape}, ground truth {ground_truth.shape}"
 
                 # compute metrics
-                total_psnr += self.compute_psnr(mse_val, self.alpha)
-                total_ssim += self.compute_ssim(pred, ground_truth)
+                total_psnr += compute_psnr(mse_val, self.alpha)
+                total_ssim += compute_ssim(pred, ground_truth)
         
         return total_val_loss, total_psnr, total_ssim
 
@@ -316,11 +349,10 @@ class ModelBase(Module):
         self.setup_optimizer_and_loss(model)
         loss = self.loss_fn
 
+
         # accelerates training
         model, opt, train_dataloader, val_dataloader = self.accelerator.prepare(model, self.optimizer, train_dataloader, val_dataloader)
         
-
-
         # initialize early stopping
         early_stopping = EarlyStopping(patience=patience, debug=self.debug, path=f'{self.model_path}_best.pth',  logger=self.logger)
 
@@ -412,8 +444,28 @@ class ModelBase(Module):
         self._set_seed()
 
         # Load test dataset
-        test_data = LoDoPaBDataset(self.test_path, self.vg, self.angles, self.pg, self.A, self.n_single_BP, self.alpha,  self.i_0, self.sigma, self.seed, self.max_len, False)
-        test_dataloader = DataLoader(test_data, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
+        is_gcs = self.training_path.startswith("gs://")
+
+        test_data = LoDoPaBDataset(self.test_path, 
+        self.vg, 
+        self.angles, 
+        self.pg, 
+        self.A, 
+        self.n_single_BP, 
+        self.alpha,  
+        self.i_0, 
+        self.sigma, 
+        self.seed, 
+        self.max_len, 
+        False, 
+        self.logger)
+
+        test_dataloader = DataLoader(test_data, 
+        batch_size=self.batch_size, 
+        shuffle=False, 
+        num_workers=0 if is_gcs else 4,
+        pin_memory=True,
+        persistent_workers=not is_gcs) 
 
         # save ground truth and predictions
         gt_images = []
@@ -450,8 +502,8 @@ class ModelBase(Module):
                 total_test_loss += mse_val
 
                 # compute metrics
-                total_psnr += self.compute_psnr(mse_val, self.alpha)
-                total_ssim += self.compute_ssim(pred, ground_truth)
+                total_psnr += compute_psnr(mse_val, self.alpha)
+                total_ssim += compute_ssim(pred, ground_truth)
 
                 # save gound truth and prediction
                 predictions.append(pred.cpu())

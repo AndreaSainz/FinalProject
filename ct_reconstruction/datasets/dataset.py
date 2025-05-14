@@ -24,7 +24,7 @@ class LoDoPaBDataset(Dataset):
     """
 
 
-    def __init__(self, ground_truth_dir, vg, angles, pg, A, n_single_BP= 16, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False):
+    def __init__(self, ground_truth_dir, vg, angles, pg, A, n_single_BP= 16, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None):
         
         #Scan parameters from the paper and data
         self.pixels = 362               # Image resolution of 362x362 pixels on a domain size of 26x26 cm
@@ -45,8 +45,10 @@ class LoDoPaBDataset(Dataset):
 
         # Debug parameter
         self.debug = debug
+        self.logger = logger or logging.getLogger(__name__)
         self.max_len = max_len  # Optional limit on number of samples
 
+        
 
         # tomosipo volume and projection geometry
         self.vg = vg                                                     
@@ -85,10 +87,28 @@ class LoDoPaBDataset(Dataset):
             required_files = math.ceil(self.max_len / self.slices_per_file)
             self.files = self.files[:required_files]
 
+        # save logs
+        self._log(f"[Dataset] Using directory: {self.ground_truth_dir}")
+        self._log(f"[Dataset] Found {len(self.files)} files.")
 
+
+    def _log(self, msg):
+        """
+        Logs a message to the logger's file and optionally prints it to the console.
+
+        This method ensures that:
+        - All messages are always logged to the file through the logger.
+        - Messages are printed to the console only if debug mode is enabled.
+
+        Args:
+            msg (str): The message to be logged.
+        """
+        # Always log to file
+        self.logger.info(msg)
+
+        # Only print to console if debug mode is active
         if self.debug:
-            print(f"[Dataset] Using directory: {self.ground_truth_dir}")
-            print(f"[Dataset] Found {len(self.files)} files.")
+            print(msg)
 
 
 
@@ -123,8 +143,6 @@ class LoDoPaBDataset(Dataset):
 
         # Simulate measured photons using Poisson noise (counting error)
         measured_photons = torch.poisson(self.i_0 * torch.exp(-sinogram))
-        if self.debug :
-            print("Measured photons stats:", measured_photons.min().item(), measured_photons.max().item())
 
         # Avoid log(0) by setting the minimum to 1
         measured_photons = torch.clamp(measured_photons, min=1.0)
@@ -179,10 +197,9 @@ class LoDoPaBDataset(Dataset):
         # Extract the specific slice
         sample_slice = sample[local_idx].unsqueeze(0)      #.unsqueeze(0) ensures the pytorch tensor is in the form (1,362,362) instead of (362,362)
     
-        if self.debug :
-            print(f"[Dataset] Taking file number: {file_number}")
-            print(f"[Dataset] Using file path: {file_path}")
-            print(f"[Dataset] Taking image number: {local_idx}")
+        self._log(f"[Dataset] Taking file number: {file_number}")
+        self._log(f"[Dataset] Using file path: {file_path}")
+        self._log(f"[Dataset] Taking image number: {local_idx}")
 
         return sample_slice
 
@@ -253,15 +270,13 @@ class LoDoPaBDataset(Dataset):
         sinogram = self.A(sample_slice)
     
 
-        if self.debug:
-          print(f"[Sinogram] Sinogram - min: {sinogram.min().item():.4f}, max: {sinogram.max().item():.4f}, mean: {sinogram.mean().item():.4f}, std: {sinogram.std().item():.4f}")
+        #self._log(f"[Sinogram] Sinogram - min: {sinogram.min().item():.4f}, max: {sinogram.max().item():.4f}, mean: {sinogram.mean().item():.4f}, std: {sinogram.std().item():.4f}")
 
         # Add nose to sinogram
         noisy_sinogram = self.noise(sinogram)
 
         # Print the shape of the sinogram
-        if self.debug == 1:
-            print("Sinogram shape:", sinogram.shape)
+        #self._log("[Sinogram] Sinogram shape:", sinogram.shape)
 
                                                                                 
         #Create single-back projections

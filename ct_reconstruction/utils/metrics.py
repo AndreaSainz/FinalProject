@@ -1,5 +1,6 @@
 from pytorch_msssim import ssim
 import math
+import torch
 
 
 def compute_psnr(mse, max_val=1.0):

@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import torch
 
 def show_example(output_img, ground_truth):
         """

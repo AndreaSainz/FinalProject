@@ -1,16 +1,56 @@
 # Final Project
-This is a private repository for uploading the final project code for the Mphil in Data Intensive Science.
+This is a private repository for the final project submission for the MPhil in Data Intensive Science.
+
+The project implements a complete, modular deep learning pipeline for low-dose CT image reconstruction, built around a custom Python package: `ct_reconstruction`.
 
 ## Declarations of use of autogeneration tools 
 
-In the course of developing this project, I utilised two autogenerative tools, namely ChatGPT and DeepL Write. 
+This project made active use of **OpenAI's ChatGPT** as a development assistant throughout its creation.
 
-ChatGPT was utilised to optimise the visual representation of graphs, facilitating alterations in colour or image distribution. Furthermore, it was employed to generate the plots derived from the Optuna study.
-Additionally, it was employed to resolve minor programming issues, such as debugging errors. Moreover, it enabled the implementation of particular functions, such as TPESampler for the reproducibility of optuna studies. 
+### Areas Where ChatGPT Was Used
 
-Furthermore, DeepL Write was utilised to paraphrase the text, incorporating a more formal and academic style into the code comments and report. It should be noted that DeepL Write is not a tool for the generation of text; rather, it is designed for the improvement of existing texts. 
+- **Docstring Generation**  
+  ChatGPT was used to autogenerate consistent, professional docstrings for all files, classes, and functions.
 
-The collective application of these tools resulted in an improvement in the clarity, functionality, and presentation of the project.
+- **Debugging Help**  
+  Assisted in resolving tensor shape mismatches, data loader bugs, and training pipeline errors.
+
+- **Plotting Improvements**  
+  Helped refine plotting utilities to better represent training and test performance visually, exactly as intended.
+
+- **Logging & Callbacks**  
+  The `configure_logger` function and `EarlyStopping` class were developed with guidance from ChatGPT for clarity and maintainability.
+
+- **Code Refactoring & Optimization**  
+  Provided suggestions for making code more modular, scalable, and readable without sacrificing performance.
+
+- **README Generation**  
+  This very README was drafted and refined with help from ChatGPT.
+
+---
+
+### Example Interaction
+
+**Prompt:**
+> Could you improve the docstring of this function that calculates PSNR and tell me what a good file-level docstring would look like?
+
+**Response:**
+``` python
+def compute_psnr(mse, max_val=1.0):
+    """
+    Computes the Peak Signal-to-Noise Ratio (PSNR) between two images.
+
+    PSNR is a logarithmic metric that compares the ratio between the maximum possible
+    pixel value and the mean squared error (MSE) between a reconstructed and a reference image.
+
+    Args:
+        mse (float or torch.Tensor): Mean squared error between reconstructed and reference images.
+        max_val (float, optional): Maximum possible pixel value (default: 1.0).
+
+    Returns:
+        float: PSNR value in decibels (dB). Returns infinity if MSE is zero.
+    """
+```
 
 ## Installation
 For the correct operation of the coursework follow the following steps.
@@ -93,20 +133,87 @@ pip install -r requirements.txt
 
 At this point, you are prepared to execute the Jupyter notebooks with the coursework. 
 
-## Structure of the coursework
+## Documentation
+In addition to the Python dependencies listed in `requirements.txt`, you need to have **Pandoc** installed for building the Sphinx documentation.
 
-This work is comprised of six discrete files, each of which can be executed independently.
+Follow the instructions below to install Pandoc based on your operating system:
 
-The files designated as "samples.py" and "test_samples.ipynb" correspond to the initial activity of the work, designated as "Task 1." The initial file contains the functions that generate the samples, while the subsequent file comprises an examination of the generated samples to corroborate their operational efficacy.
+- **Ubuntu/Debian**:
+```bash
+   sudo apt-get install pandoc
+```
+- **macOS (Homebrew)**:
+```bash
+brew install pandoc
+```
+- **Conda**:
+```bash
+conda install -c conda-forge pandoc
+```
+- **Windows**:
+Download and install Pandoc from the official website:
+<https://pandoc.org/installing.html>
 
-The file entitled "neural_network.ipynb" contains the code for task 2 of the project. 
+To generate documentation using Sphinx run following commands from the root of the repository:
 
-The file entitled "sklearn_models.ipynb" contains the code for task 3 of the project. 
+```bash
+cd docs
+make html
+```
+Once the documentation is created open the file index.html located in:
 
-The file entitled "weak_linear_classifiers.ipynb" contains the code for task 4 of the project. 
+```bash
+docs/_build/html
+```
 
-The file t-SNE.ipynb contains the code for task 5 of the project. 
+## Project Structure
 
-The folder entitled "Models" contains the saved models from the executions. The models have been loaded directly into the notebooks, thus obviating the need to re-run the Optuna studies. In the event that these studies are to be conducted and the models obtained from them are to be employed in the cells, the requisite modifications are indicated.
+```
+.
+├── ct_reconstruction/               # Custom package for reconstruction
+│   ├── callbacks/                   # EarlyStopping and callback utilities
+│   ├── datasets/                    # Dataset logic and sinogram simulation
+│   ├── models/                      # Model architectures (e.g., DBP)
+│   └── utils/                       # Logging, plotting, and metrics
+│
+├── docs/                            # Sphinx documentation
+├── dataset_class.ipynb             # Notebook to inspect dataset logic
+├── checking_last_patient.ipynb     # Notebook for final dataset check
+├── README.md                        # This file
+├── Instructions.md
+├── pyproject.toml                   # Project configuration
+├── requirements.txt                # Python dependencies
+└── LICENSE
+```
 
-The majority of the results presented in this study are reproducible if the notebook is executed on the same computer on multiple occasions (it should be noted that slight discrepancies may occur when the computer is changed, due to the influence of CPU or GPU operations). This applies equally to the results derived from the Optuna studies. Nevertheless, there are instances where the results are not fully reproducible. This phenomenon is particularly evident in the case of perplexity optimisation in the t-SNE algorithm, where the order of execution is not reproducible due to the internal parallelisation of the function. Although the discrepancy in results is slight, it is not entirely predictable.
+
+
+## Description of Custom Package: `ct_reconstruction`
+
+The `ct_reconstruction` package is fully modular and contains:
+
+- `datasets/`: Implements `LoDoPaBDataset`, handles loading, preprocessing, noise simulation, and sparse-view generation.
+- `models/`: Includes `DBP` model class and helpers.
+- `callbacks/`: Contains `EarlyStopping` logic with logging support.
+- `utils/`: Provides plotting utilities, metric functions (PSNR, SSIM), and logger configuration.
+
+All components are integrated into a clean training pipeline using PyTorch and `accelerate`.
+
+
+
+## License
+
+This project is released under the MIT License.
+
+
+
+## Acknowledgments
+
+- [LoDoPaB-CT Dataset](https://www.visnow.org/data/lodopab)
+- [tomosipo](https://github.com/ahendriksen/tomosipo)
+- [pytorch-msssim](https://github.com/VainF/pytorch-msssim)
+- **OpenAI ChatGPT** – for assistance with documentation, code review, modularization, and design.
+
+
+
+

@@ -35,10 +35,10 @@ class DBP(ModelBase):
     """
 
 
-    def __init__(self, in_channels, training_path, validation_path, test_path, model_path, n_single_BP, alpha, i_0, sigma, max_len, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, log_file):
+    def __init__(self, in_channels, training_path, validation_path, test_path, model_path, n_single_BP, alpha, i_0, sigma, max_len_train, max_len_val, batch_size, epochs, learning_rate, debug, seed, log_file):
         
         # Initialize the base training infrastructure
-        super().__init__(training_path, validation_path, test_path, model_path, "DBP", n_single_BP, alpha, i_0, sigma, max_len, batch_size, epochs, optimizer_type, loss_type,learning_rate, debug, seed, log_file)
+        super().__init__(training_path, validation_path, test_path, model_path, "DBP", n_single_BP, alpha, i_0, sigma, max_len_train, max_len_val, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, log_file)
 
         self.in_channels = in_channels
         # initial layer

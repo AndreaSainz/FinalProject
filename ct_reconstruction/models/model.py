@@ -20,13 +20,17 @@ import matplotlib.pyplot as plt
 import logging
 from accelerate import Accelerator
 
+
 class ModelBase(Module):
     """
-    Base class for training and validating deep learning models.
+    Abstract base class for CT reconstruction model training, evaluation, and testing.
 
-    This class provides a reusable structure to train models on datasets
-    using PyTorch, with methods for training, validation, testing, metric computation and ploting.
-    It is intended to be subclassed for specific architectures (e.g., CNNs, NNs, classifiers).
+    This class provides a general framework to:
+    - Load CT datasets and reconstruction operators
+    - Train deep learning models using PyTorch
+    - Evaluate performance via PSNR, SSIM, and loss
+    - Save/load predictions and metrics
+    - Plot performance metrics over epochs
 
     Attributes:
         training_path (str): Path to the training dataset.
@@ -34,19 +38,24 @@ class ModelBase(Module):
         test_path (str): Path to the test dataset.
         model_path (str): Path to save trained models and logs.
         model_type (str): Name or identifier of the model architecture.
-        n_single_BP (int): Number of single backprojections used per sample.
-        i_0 (float): Incident X-ray intensity (used for noise modeling).
+        n_single_BP (int): Number of single backprojections per sample.
+        alpha (float): Normalization factor used for scaling.
+        i_0 (float): Incident X-ray intensity for noise modeling.
         sigma (float): Standard deviation of the noise.
-        batch_size (int): Number of samples per training batch.
-        epochs (int): Number of full passes through the training dataset.
-        optimizer_type (str): Optimizer name (e.g., 'Adam').
-        loss_type (str): Loss function name (e.g., 'MSELoss').
-        learning_rate (float): Learning rate for optimizer.
+        max_len_train (int): Max number of training samples to load.
+        max_len_val (int): Max number of validation samples to load.
+        batch_size (int): Number of samples per batch.
+        epochs (int): Total number of training epochs.
+        optimizer_type (str): Optimizer type (e.g., "Adam", "AdamW").
+        loss_type (str): Loss function name (e.g., "MSELoss").
+        learning_rate (float): Initial learning rate.
+        debug (bool): Whether to print debug messages.
         seed (int): Random seed for reproducibility.
-        debug (bool): Whether to print debug information.
+        scheduler (bool): Whether to use a learning rate scheduler.
+        log_file (str): Path to the model logger.
     """
 
-    def __init__(self, training_path, validation_path, test_path, model_path, model_type, n_single_BP, alpha, i_0, sigma, max_len, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, log_file='training.log'):
+    def __init__(self, training_path, validation_path, test_path, model_path, model_type, n_single_BP, alpha, i_0, sigma,  max_len_train, max_len_val, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, scheduler = True, log_file='training.log'):
         super().__init__()
 
         #Scan parameters from the paper and data
@@ -70,7 +79,8 @@ class ModelBase(Module):
         self.alpha = alpha
         self.i_0 = i_0
         self.sigma = sigma
-        self.max_len = max_len
+        self.max_len_train = max_len_train
+        self.max_len_val = max_len_val
 
         # model parameters
         self.model = self
@@ -86,6 +96,7 @@ class ModelBase(Module):
         self.loss_type = loss_type
         self.optimizer = None
         self.loss_fn = None
+        self.scheduler = scheduler
 
         # accelerator for faster code
         self.accelerator = Accelerator()
@@ -136,11 +147,12 @@ class ModelBase(Module):
 
     def _get_dataloaders(self):
         """
-        Loads the training and validation datasets and returns the corresponding DataLoaders.
+        Loads training and validation datasets and creates corresponding DataLoaders.
 
         Returns:
             tuple: (train_dataloader, val_dataloader)
         """
+        # looking if we are using data from google storage
         is_gcs = self.training_path.startswith("gs://")
 
         
@@ -155,7 +167,7 @@ class ModelBase(Module):
             self.i_0,
             self.sigma,
             self.seed,
-            self.max_len, 
+            self.max_len_train, 
             False,
             self.dataset_logger)
 
@@ -169,7 +181,7 @@ class ModelBase(Module):
             self.i_0, 
             self.sigma, 
             self.seed, 
-            self.max_len, 
+            self.max_len_val, 
             False, 
             self.dataset_logger)
 
@@ -202,7 +214,14 @@ class ModelBase(Module):
 
 
     def setup_optimizer_and_loss(self):
-        """Initialize optimizer and loss function based on config strings."""
+        """
+        Initializes the optimizer and loss function based on configuration.
+        
+        Raises:
+            ValueError: If the optimizer or loss type is unsupported.
+        """
+
+        #optimiser
         if self.optimizer_type == "Adam":
             self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
 
@@ -211,6 +230,7 @@ class ModelBase(Module):
         else:
             raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
 
+        # Loss function
         if self.loss_type == "MSELoss":
             self.loss_fn = MSELoss()
         else:
@@ -220,19 +240,17 @@ class ModelBase(Module):
 
     def train_one_epoch(self, train_dataloader, opt, loss, e):
         """
-        Runs a single epoch of training on the model.
+        Performs one full training epoch on the dataset.
 
         Args:
-            model (torch.nn.Module): Model to be trained.
-            train_dataloader (DataLoader): Dataloader for training set.
-            opt (torch.optim.Optimizer): Optimizer instance.
+            train_dataloader (DataLoader): DataLoader for training data.
+            opt (Optimizer): Optimizer used for model updates.
             loss (nn.Module): Loss function.
-            e (int): Epoch index for logging.
+            e (int): Current epoch index (for logging).
 
         Returns:
-            float: Total training loss for the epoch.
+            float: Total accumulated training loss.
         """
-
         # set the model in training mode
         self.model.train()
 
@@ -264,18 +282,18 @@ class ModelBase(Module):
         return total_train_loss
 
 
-    def validation(self, val_dataloader, loss, e):
+    def validation(self, val_dataloader, loss, mse_fn, e):
         """
-        Evaluates the model on the validation set and computes PSNR, SSIM, and loss.
+        Evaluates model performance on validation data.
 
         Args:
-            model (torch.nn.Module): Model to evaluate.
-            val_dataloader (DataLoader): Validation data loader.
+            val_dataloader (DataLoader): Validation DataLoader.
             loss (nn.Module): Loss function.
-            e (int): Epoch index for logging.
+            mse_fn (nn.Module or None): MSE function, used for PSNR calculation.
+            e (int): Current epoch index.
 
         Returns:
-            tuple: Total validation loss, accumulated PSNR, accumulated SSIM.
+            tuple: (total_val_loss, total_psnr, total_ssim)
         """
 
         # switch off autograd for evaluation
@@ -298,13 +316,18 @@ class ModelBase(Module):
             
                 # make the predictions and calculate the validation loss
                 pred = self.model(single_back_projections)
-                mse_val = loss(pred, ground_truth).item()
-                total_val_loss += mse_val
+                loss_value = loss(pred, ground_truth).item()
+                total_val_loss += loss_value
 
                 # checking that predictions and ground truth images have same shape
                 assert ground_truth.shape == pred.shape, f"[ERROR] Shape mismatch: predicted {pred.shape}, ground truth {ground_truth.shape}"
 
                 # compute metrics
+                if self.loss_type == "MSELoss" or mse_fn is None:
+                    mse_val = loss_value
+                else:
+                    mse_val = mse_fn(pred, ground_truth).item()
+
                 total_psnr += compute_psnr(mse_val, self.alpha)
                 total_ssim += compute_ssim(pred, ground_truth)
         
@@ -314,16 +337,14 @@ class ModelBase(Module):
 
     def train(self, patience, confirm_train=False):
         """
-        Full training loop for the model, including early stopping, metric tracking,
-        and learning rate scheduling.
+        Full training loop including early stopping, metric logging, and scheduler.
 
         Args:
-            model (torch.nn.Module): Model to train.
-            patience (int): Number of epochs to wait without improvement before stopping.
-            confirm_train (bool): Ask for manual confirmation before training (default True).
+            patience (int): Early stopping patience in epochs.
+            confirm_train (bool): Whether to require user confirmation before training.
 
         Returns:
-            tuple: Training history dictionary and trained model.
+            dict: Training history with loss and metrics per epoch.
         """
 
         # fix seed
@@ -350,6 +371,9 @@ class ModelBase(Module):
         self.setup_optimizer_and_loss()
         loss = self.loss_fn
 
+        # for mse value calculation in case the loss is not MSE
+        mse_fn = MSELoss() if self.loss_type != "MSELoss" else None
+
 
         # accelerates training
         self.model, opt, train_dataloader, val_dataloader = self.accelerator.prepare(self.model, self.optimizer, train_dataloader, val_dataloader)
@@ -358,7 +382,8 @@ class ModelBase(Module):
         early_stopping = EarlyStopping(patience=patience, debug=self.debug, path=f'{self.model_path}_best.pth',  logger=self.logger)
 
         # initialize scheduler for learning rate
-        scheduler = ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=5)
+        if self.scheduler:
+            scheduler = ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=5)
 
         # initialize a dictionary to store training history
         history = {
@@ -382,7 +407,7 @@ class ModelBase(Module):
 
                 
             # call the validation function
-            total_val_loss, total_psnr, total_ssim = self.validation(val_dataloader, loss, e)
+            total_val_loss, total_psnr, total_ssim = self.validation(val_dataloader, loss, mse_fn, e)
 
             
             # update our training history
@@ -396,26 +421,28 @@ class ModelBase(Module):
             history["psnr"].append(avg_psnr)
             history["ssim"].append(avg_ssim)
 
-            # update the learning rate scheduler
-            scheduler.step(avg_train_loss)
+            # update the learning rate scheduler (when the validation loss is not improving)
+            if self.scheduler:
+                scheduler.step(avg_val_loss)
 
             # check ealy stopping
             early_stopping(avg_val_loss, self.model)
 
-            # change model training 
-            self.trained = True
-
+        
             if early_stopping.early_stop:
                 self._log(f"Early stopping stopped at epoch {e+1}")
                 break
             
-            
-
+        
             # print the model training and validation information
             t.set_postfix({
                 "train_loss": f"{avg_train_loss:.6f}",
                 "val_loss": f"{avg_val_loss:.6f}"
             })
+
+
+        # change model training 
+        self.trained = True
 
         # finish measuring how long training took
         end_time = time.time()
@@ -431,229 +458,289 @@ class ModelBase(Module):
         return history
 
 
-    def test(self):
+    def _get_test_dataloaders(self):
         """
-        Perform testing on the provided test dataset and report final metrics.
-
-        Args:
-            model (torch.nn.Module): The trained PyTorch model to evaluate.
+        Loads test dataset and returns DataLoader.
 
         Returns:
-            dict: Dictionary containing average test loss, PSNR, SSIM, ground truth images and reconstructed ones.
+            DataLoader: Dataloader for the test dataset.
         """
-        if self.trained:
-            # fix seed for reproducibility
-            self._set_seed()
 
-            # Load test dataset
-            is_gcs = self.training_path.startswith("gs://")
+        # Load test dataset
+        is_gcs = self.training_path.startswith("gs://")
 
-            test_data = LoDoPaBDataset(self.test_path, 
-            self.vg, 
-            self.angles, 
-            self.pg, 
-            self.A, 
-            self.n_single_BP, 
-            self.alpha,  
-            self.i_0, 
-            self.sigma, 
-            self.seed, 
-            self.max_len, 
-            False, 
-            self.dataset_logger)
+        test_data = LoDoPaBDataset(self.test_path, 
+        self.vg, 
+        self.angles, 
+        self.pg, 
+        self.A, 
+        self.n_single_BP, 
+        self.alpha,  
+        self.i_0, 
+        self.sigma, 
+        self.seed, 
+        max_len_test, 
+        False, 
+        self.dataset_logger)
 
-            test_dataloader = DataLoader(test_data, 
-            batch_size=self.batch_size, 
-            shuffle=False, 
-            num_workers=0 if is_gcs else 4,
-            pin_memory=True,
-            persistent_workers=not is_gcs) 
+        test_dataloader = DataLoader(test_data, 
+        batch_size=self.batch_size, 
+        shuffle=False, 
+        num_workers=0 if is_gcs else 4,
+        pin_memory=True,
+        persistent_workers=not is_gcs) 
 
-            # save ground truth and predictions
-            gt_images = []
-            predictions = []
-
-            
-            self._log(f"Testing the {self.model_type} model...")
-
-            # initialize  optimizer and loss function
-            self.setup_optimizer_and_loss()
-            model, loss, test_dataloader = self.accelerator.prepare(self.model, self.loss_fn, test_dataloader)
-
-
-            # switch off autograd for evaluation
-            with torch.no_grad():
-
-                # set the model in evaluation mode
-                self.model.eval()
-
-                # initialize metrics
-                total_test_loss = 0
-                total_psnr = 0
-                total_ssim = 0
-
-                # loop over the validation set
-                for batch in tqdm(test_dataloader):
-                    # send the input to the device
-                    ground_truth = batch['ground_truth']
-                    single_back_projections = batch['single_back_projections']
-
-                    # make the predictions and calculate the validation loss
-                    pred = model(single_back_projections)
-                    mse_val = loss(pred, ground_truth).item()
-                    total_test_loss += mse_val
-
-                    # compute metrics
-                    total_psnr += compute_psnr(mse_val, self.alpha)
-                    total_ssim += compute_ssim(pred, ground_truth)
-
-                    # save gound truth and prediction
-                    predictions.append(pred.cpu())
-                    gt_images.append(ground_truth.cpu())
-                    
-            
-
-            # training history
-            avg_test_loss = total_test_loss / len(test_dataloader)
-            avg_psnr = total_psnr / len(test_dataloader)
-            avg_ssim = total_ssim / len(test_dataloader)
-
-
-            results = {
-                "test_loss": avg_test_loss,
-                "psnr": avg_psnr,
-                "ssim": avg_ssim
-            }
-
-            # save predictions and ground truth
-            torch.save(torch.cat(predictions), f"{self.model_path}_predictions_images.pt")
-            torch.save(torch.cat(gt_images), f"{self.model_path}_ground_truth_images.pt")
-            self._log(f"Predictions saved to '{self.model_path}_predictions_images.pt")
-            self._log(f"Predictions saved to '{self.model_path}_ground_truth_images.pt")
-
-            # save metrics to file
-            with open(f'{self.model_path}_test_metrics.json', 'w') as f:
-                json.dump(results, f)
-
-            self._log(f"Test Loss: {avg_test_loss:.6f} | PSNR: {avg_psnr:.2f} dB | SSIM: {avg_ssim:.4f}")
-            self._log(f"Test metrics saved to '{self.model_path}_test_metrics.json'")
-
-            return results
-        
-        else:
-            self._log(f"This model is not trained yet.",  level='warning')
+        return test_dataloader
 
 
 
-
-    def results(self, mode, example_number, save_path=None):
+    def evaluate(self, test_dataloader, loss, mse_fn):
         """
-        Display or plot training and/or testing results.
+        Evaluates the model on the test dataset.
 
         Args:
-            mode (str): 'training', 'testing', or 'both' to choose which results to show.
-            example_number (int): Number of random test examples to display.
+            test_dataloader (DataLoader): Dataloader for the test set.
+            loss (nn.Module): Loss function used during testing.
+            mse_fn (nn.Module or None): MSE loss function for computing PSNR if needed.
+
+        Returns:
+            tuple: (predictions, ground_truths, total_loss, total_psnr, total_ssim)
         """
 
-        if self.trained:
+        # save ground truth and predictions
+        gt_images = []
+        predictions = []
 
-            
-            if mode == "training":
-                # handling file path error
-                if not os.path.exists(f"{self.model_path}_metrics.json"):
-                    self._log(f"File not found: {self.model_path}_metrics.json", level='error')
-                    return None
+        # switch off autograd for evaluation
+        with torch.no_grad():
+
+            # set the model in evaluation mode
+            self.model.eval()
+
+            # initialize metrics
+            total_test_loss = 0
+            total_psnr = 0
+            total_ssim = 0
+
+            # loop over the validation set
+            for batch in tqdm(test_dataloader):
+                # send the input to the device
+                ground_truth = batch['ground_truth']
+                single_back_projections = batch['single_back_projections']
+
+                # make the predictions and calculate the validation loss
+                pred = self.model(single_back_projections)
+                loss_val = loss(pred, ground_truth).item()
+                total_test_loss += loss_val
+
+                # checking that predictions and ground truth images have same shape
+                assert ground_truth.shape == pred.shape, f"[ERROR] Shape mismatch: predicted {pred.shape}, ground truth {ground_truth.shape}"
+
+                # compute metrics
+                if self.loss_type == "MSELoss" or mse_fn is None:
+                    mse_val = loss_val
                 else:
-                    with open(f'{self.model_path}_metrics.json', 'r') as f:
-                        history = json.load(f)
-                
-                # the plot functions need a list of epochs
-                epochs = range(1, len(history['train_loss']) + 1)
+                    mse_val = mse_fn(pred, ground_truth).item()
 
-                #plot Loss
-                loss_dict = {'Train Loss': history['train_loss'], 'Val Loss': history['val_loss']}
-                plot_metric(epochs,loss_dict, title='Loss over Epochs', xlabel='Epoch', ylabel='Loss', test_value=None, save_path=f"{save_path}_training_loss.png" )
-                self._log(f"Saved plot to {save_path}_training_loss.png")
-                
+                total_psnr += compute_psnr(mse_val, self.alpha)
+                total_ssim += compute_ssim(pred, ground_truth)
 
-                # plot PSNR
-                psnr_dict = {'PSNR metric':  history['psnr']}
-                plot_metric(epochs, psnr_dict, 'Validation PSNR over Epochs', 'Epoch', 'PSNR (dB)', test_value=None, save_path=f"{save_path}_training_psnr.png")
-                self._log(f"Saved plot to {save_path}_training_psnr.png")
-                
+                # save gound truth and prediction
+                predictions.append(pred.cpu())
+                gt_images.append(ground_truth.cpu())
 
-                # plot SSIM
-                ssim_dict = {'SSIM metric':  history['ssim']}
-                plot_metric(epochs, ssim_dict, 'Validation SSIM over Epochs', 'Epoch', 'SSIM', test_value=None, save_path=f"{save_path}_training_ssim.png")
-                self._log(f"Saved plot to {save_path}_training_ssim.png")
-            
+        return predictions, gt_images, total_test_loss, total_psnr, total_ssim
 
 
-            elif mode == "testing":
-                # handling file path error
-                if not os.path.exists(f"{self.model_path}_test_metrics.json"):
-                    self._log(f"File not found: {self.model_path}_test_metrics.json", level='error')
-                    return None
-                elif not os.path.exists(f"{self.model_path}_predictions_images.pt") or not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
-                    self._log("Prediction or ground truth .pt files not found", level="error")
-                    return
+    def test(self, max_len_test):
+        """
+        Tests the trained model on the test set and saves predictions and metrics.
 
-                else:
-                    with open(f'{self.model_path}_test_metrics.json', 'r') as f:
-                        test_results = json.load(f)
-                    predictions = torch.load(f"{self.model_path}_predictions_images.pt")
-                    ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
+        Args:
+            max_len_test (int): Maximum number of test samples to load.
 
-                #plot results
-                print("\n=== Testing Results ===")
-                print(f"Test Loss: {test_results['test_loss']:.6f}")
-                print(f"Test PSNR: {test_results['psnr']:.2f} dB")
-                print(f"Test SSIM: {test_results['ssim']:.4f}")
+        Returns:
+            dict: Dictionary containing average test loss, PSNR, and SSIM.
+        """
 
-                # get random samples
-                random.seed(self.seed)
-                samples = random.sample(range(0, len(predictions)), example_number)
+        # Check if the model has been trained
+        if not self.trained:
+            self._log("This model is not trained yet.", level='warning')
+            return
 
-                for example in samples:
-                    self.show_example(predictions[example], ground_truths[example])
-                    
+        # fix seed for reproducibility
+        self._set_seed()
+
+        # get test data loader
+        test_dataloader = self._get_test_dataloaders()
+        
+        # for mse value calculation in case the loss is not MSE
+        mse_fn = MSELoss() if self.loss_type != "MSELoss" else None
 
 
-            elif mode == "both":
-                # handling file path error
-                if not os.path.exists(f"{self.model_path}_test_metrics.json"):
-                    
-                    self._log(f"File not found: {self.model_path}_test_metrics.json", level='error')
-                    return None
+        self._log(f"Testing the {self.model_type} model...")
 
-                elif not os.path.exists(f"{self.model_path}_metrics.json"):
-                    self._log(f"File not found: {self.model_path}_metrics.json", level='error')
-                    return None
+        # initialize  optimizer and loss function
+        self.setup_optimizer_and_loss()
+        model, loss, test_dataloader = self.accelerator.prepare(self.model, self.loss_fn, test_dataloader)
 
-                else:
-                    with open(f'{self.model_path}_test_metrics.json', 'r') as f:
-                        test_results = json.load(f)
-                    with open(f'{self.model_path}_metrics.json', 'r') as f:
-                        history = json.load(f)
+        # call evaliation function
+        predictions, gt_images, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)
+        
+    
+        # training history
+        avg_test_loss = total_test_loss / len(test_dataloader)
+        avg_psnr = total_psnr / len(test_dataloader)
+        avg_ssim = total_ssim / len(test_dataloader)
 
 
-                # the plot functions need a list of epochs
-                epochs = range(1, len(history['train_loss']) + 1)
+        results = {
+            "test_loss": avg_test_loss,
+            "psnr": avg_psnr,
+            "ssim": avg_ssim
+        }
 
-                # plot Loss
-                loss_dict = {'Train Loss': history['train_loss'], 'Val Loss': history['val_loss']}
-                plot_metric(epochs,loss_dict, title='Loss over Epochs', xlabel='Epoch', ylabel='Loss', test_value=test_results['test_loss'], save_path=f"{save_path}_train_test_loss.png")
-                self._log(f"Saved plot to {save_path}_train_test_loss")
+        # save predictions and ground truth
+        torch.save(torch.cat(predictions), f"{self.model_path}_predictions_images.pt")
+        torch.save(torch.cat(gt_images), f"{self.model_path}_ground_truth_images.pt")
+        self._log(f"Predictions saved to {self.model_path}_predictions_images.pt")
+        self._log(f"Predictions saved to {self.model_path}_ground_truth_images.pt")
 
-                # plot PSNR
-                psnr_dict = {'Val PSNR': history['psnr']}
-                plot_metric(epochs, psnr_dict, title='PSNR over Epochs', xlabel='Epoch', ylabel='PSNR (dB)', test_value=test_results['psnr'], save_path=f"{save_path}_train_test_psnr.png" )
-                self._log(f"Saved plot to {save_path}_train_test_psnr.png")
+        # save metrics to file
+        with open(f'{self.model_path}_test_metrics.json', 'w') as f:
+            json.dump(results, f)
 
-                # plot SSIM
-                ssim_dict = {'Val SSIM': history['ssim']}
-                plot_metric(epochs, ssim_dict, title='SSIM over Epochs', xlabel='Epoch', ylabel='SSIM', test_value=test_results['ssim'], save_path=f"{save_path}_train_test_ssim.png" )
-                self._log(f"Saved plot to {save_path}_train_test_ssim.png")
-                
-        else:
+        self._log(f"Test Loss: {avg_test_loss:.6f} | PSNR: {avg_psnr:.2f} dB | SSIM: {avg_ssim:.4f}")
+        self._log(f"Test metrics saved to {self.model_path}_test_metrics.json")
+
+        return results
+        
+
+
+
+
+    def results(self, mode, example_number = 0, save_path=None):
+        """
+        Visualizes and logs training and/or test results using stored metrics and predictions.
+
+        This function can generate plots for:
+        - Training: loss, PSNR, and SSIM over epochs.
+        - Testing: numerical results and qualitative visual comparisons.
+        - Both: combines training and test metrics in the same plots (with test metric as a horizontal line).
+
+        For testing mode, random image samples are displayed for visual inspection.
+
+        Args:
+            mode (str): One of 'training', 'testing', or 'both'.
+            example_number (int): Number of test examples to visualize.
+            save_path (str, optional): Path to save result plots. Defaults to current directory.
+
+        Raises:
+            ValueError: If `mode` is not one of the accepted values.
+            FileNotFoundError: If required metrics or predictions files are missing.
+        """
+
+        if not self.trained:
             self._log(f"This model is not trained yet.",  level='warning')
+            return
+            
+        if mode == "training":
+            # handling file path error
+            if not os.path.exists(f"{self.model_path}_metrics.json"):
+                self._log(f"File not found: {self.model_path}_metrics.json", level='error')
+                return None
+            else:
+                with open(f'{self.model_path}_metrics.json', 'r') as f:
+                    history = json.load(f)
+            
+            # the plot functions need a list of epochs
+            epochs = range(1, len(history['train_loss']) + 1)
+
+            #plot Loss
+            loss_dict = {'Train Loss': history['train_loss'], 'Val Loss': history['val_loss']}
+            plot_metric(epochs,loss_dict, title='Loss over Epochs', xlabel='Epoch', ylabel='Loss', test_value=None, save_path=f"{save_path}_training_loss.png" )
+            self._log(f"Saved plot to {save_path}_training_loss.png")
+            
+
+            # plot PSNR
+            psnr_dict = {'PSNR metric':  history['psnr']}
+            plot_metric(epochs, psnr_dict, 'Validation PSNR over Epochs', 'Epoch', 'PSNR (dB)', test_value=None, save_path=f"{save_path}_training_psnr.png")
+            self._log(f"Saved plot to {save_path}_training_psnr.png")
+            
+
+            # plot SSIM
+            ssim_dict = {'SSIM metric':  history['ssim']}
+            plot_metric(epochs, ssim_dict, 'Validation SSIM over Epochs', 'Epoch', 'SSIM', test_value=None, save_path=f"{save_path}_training_ssim.png")
+            self._log(f"Saved plot to {save_path}_training_ssim.png")
+        
+
+
+        elif mode == "testing":
+            # handling file path error
+            if not os.path.exists(f"{self.model_path}_test_metrics.json"):
+                self._log(f"File not found: {self.model_path}_test_metrics.json", level='error')
+                return None
+            elif not os.path.exists(f"{self.model_path}_predictions_images.pt") or not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
+                self._log("Prediction or ground truth .pt files not found", level="error")
+                return
+
+            else:
+                with open(f'{self.model_path}_test_metrics.json', 'r') as f:
+                    test_results = json.load(f)
+                predictions = torch.load(f"{self.model_path}_predictions_images.pt")
+                ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
+
+            #plot results
+            print("\n=== Testing Results ===")
+            print(f"Test Loss: {test_results['test_loss']:.6f}")
+            print(f"Test PSNR: {test_results['psnr']:.2f} dB")
+            print(f"Test SSIM: {test_results['ssim']:.4f}")
+
+            # get random samples
+            random.seed(self.seed)
+            samples = random.sample(range(0, len(predictions)), example_number)
+
+            for example in samples:
+                self.show_example(predictions[example], ground_truths[example])
+                
+
+
+        elif mode == "both":
+            # handling file path error
+            if not os.path.exists(f"{self.model_path}_test_metrics.json"):
+                
+                self._log(f"File not found: {self.model_path}_test_metrics.json", level='error')
+                return None
+
+            elif not os.path.exists(f"{self.model_path}_metrics.json"):
+                self._log(f"File not found: {self.model_path}_metrics.json", level='error')
+                return None
+
+            else:
+                with open(f'{self.model_path}_test_metrics.json', 'r') as f:
+                    test_results = json.load(f)
+                with open(f'{self.model_path}_metrics.json', 'r') as f:
+                    history = json.load(f)
+
+
+            # the plot functions need a list of epochs
+            epochs = range(1, len(history['train_loss']) + 1)
+
+            # plot Loss
+            loss_dict = {'Train Loss': history['train_loss'], 'Val Loss': history['val_loss']}
+            plot_metric(epochs,loss_dict, title='Loss over Epochs', xlabel='Epoch', ylabel='Loss', test_value=test_results['test_loss'], save_path=f"{save_path}_train_test_loss.png")
+            self._log(f"Saved plot to {save_path}_train_test_loss")
+
+            # plot PSNR
+            psnr_dict = {'Val PSNR': history['psnr']}
+            plot_metric(epochs, psnr_dict, title='PSNR over Epochs', xlabel='Epoch', ylabel='PSNR (dB)', test_value=test_results['psnr'], save_path=f"{save_path}_train_test_psnr.png" )
+            self._log(f"Saved plot to {save_path}_train_test_psnr.png")
+
+            # plot SSIM
+            ssim_dict = {'Val SSIM': history['ssim']}
+            plot_metric(epochs, ssim_dict, title='SSIM over Epochs', xlabel='Epoch', ylabel='SSIM', test_value=test_results['ssim'], save_path=f"{save_path}_train_test_ssim.png" )
+            self._log(f"Saved plot to {save_path}_train_test_ssim.png")
+    else:
+        raise ValueError(f"Result mode not supported. Choose when of 'training', 'testing', or 'both")
+            
+            

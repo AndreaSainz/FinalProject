@@ -33,11 +33,11 @@ class DeepFBP(ModelBase):
     """
 
 
-    def __init__(self, in_channels, training_path, validation_path, test_path, model_path, n_single_BP, alpha, i_0, sigma, max_len, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file):
+    def __init__(self, in_channels, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file):
         
         # Initialize the base training infrastructure
-        super().__init__(training_path, validation_path, test_path, model_path, "DeepFBP", n_single_BP, alpha, i_0, sigma, max_len, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
-
+        super().__init__(model_path, "DeepFBP", n_single_BP, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
+        self.model = self
 
     def forward(self, x):
     

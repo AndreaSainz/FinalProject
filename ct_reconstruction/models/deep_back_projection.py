@@ -52,15 +52,17 @@ class DBP(ModelBase):
         learning_rate (float): Initial learning rate.
         debug (bool): Whether to enable debug mode.
         seed (int): Random seed for reproducibility.
+        scheduler
         log_file (str): Path to log file.
     """
 
 
-    def __init__(self, in_channels, training_path, validation_path, test_path, model_path, n_single_BP, alpha, i_0, sigma, max_len_train, max_len_val, batch_size, epochs, learning_rate, debug, seed, log_file):
+    def __init__(self, in_channels, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file):
 
         # Initialize the base training infrastructure
-        super().__init__(training_path, validation_path, test_path, model_path, "DBP", n_single_BP, alpha, i_0, sigma, max_len_train, max_len_val, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, log_file)
-
+        super().__init__(model_path, "DBP", n_single_BP, alpha, i_0, sigma, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
+        
+        
         self.in_channels = in_channels
 
         # initial layer
@@ -73,6 +75,11 @@ class DBP(ModelBase):
 
         # last layer
         self.final = self.final_layer(in_channels=64, out_channels=1, kernel_size=3, stride=1, padding=1)
+
+        #change parameters
+        self.model = Sequential(self.conv1,*self.middle_blocks,self.final)
+
+        
 
 
 
@@ -181,12 +188,8 @@ class DBP(ModelBase):
             "alpha": self.alpha,
             "i_0": self.i_0,
             "sigma": self.sigma,
-            "max_len_train": self.max_len_train,
-            "max_len_val": self.max_len_val,
             "batch_size": self.batch_size,
             "epochs": self.epochs,
-            "optimizer_type": self.optimizer_type,
-            "loss_type": self.loss_type,
             "learning_rate": self.learning_rate,
             "debug": self.debug,
             "seed": self.seed,

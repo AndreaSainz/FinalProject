@@ -55,7 +55,7 @@ class ModelBase(Module):
         log_file (str): Path to the model logger.
     """
 
-    def __init__(self, training_path, validation_path, test_path, model_path, model_type, n_single_BP, alpha, i_0, sigma,  max_len_train, max_len_val, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, scheduler = True, log_file='training.log'):
+    def __init__(self, model_path, model_type, n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, scheduler = True, log_file='training.log'):
         super().__init__()
 
         #Scan parameters from the paper and data
@@ -72,18 +72,19 @@ class ModelBase(Module):
         self.A = ts.operator(self.vg,self.pg)                                                                        # Operator
                                                                               
         # dataset parameters
-        self.training_path = training_path
-        self.validation_path = validation_path
-        self.test_path = test_path
+        self.model = None
+        self.training_path = None
+        self.validation_path = None
+        self.test_path = None
         self.n_single_BP = n_single_BP
         self.alpha = alpha
         self.i_0 = i_0
         self.sigma = sigma
-        self.max_len_train = max_len_train
-        self.max_len_val = max_len_val
+        self.max_len_train = None
+        self.max_len_val = None
+        self.max_len_test = None
 
         # model parameters
-        self.model = self
         self.model_path = model_path
         self.model_type = model_type
         self.batch_size = batch_size
@@ -109,8 +110,7 @@ class ModelBase(Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = self.accelerator.device
 
-        # model
-        self.model = None
+        
 
 
     def _set_seed(self):
@@ -335,7 +335,7 @@ class ModelBase(Module):
 
         
 
-    def train(self, patience, confirm_train=False):
+    def train(self, training_path, validation_path, max_len_train = None, max_len_val=None, patience=10, confirm_train=False):
         """
         Full training loop including early stopping, metric logging, and scheduler.
 
@@ -346,6 +346,11 @@ class ModelBase(Module):
         Returns:
             dict: Training history with loss and metrics per epoch.
         """
+        #changing paths parameters
+        self.training_path = training_path
+        self.validation_path = validation_path
+        self.max_len_train = max_len_train
+        self.max_len_val = max_len_val
 
         # fix seed
         self._set_seed()
@@ -479,7 +484,7 @@ class ModelBase(Module):
         self.i_0, 
         self.sigma, 
         self.seed, 
-        max_len_test, 
+        self.max_len_test, 
         False, 
         self.dataset_logger)
 
@@ -552,7 +557,7 @@ class ModelBase(Module):
         return predictions, gt_images, total_test_loss, total_psnr, total_ssim
 
 
-    def test(self, max_len_test):
+    def test(self, test_path, max_len_test=None):
         """
         Tests the trained model on the test set and saves predictions and metrics.
 
@@ -562,6 +567,9 @@ class ModelBase(Module):
         Returns:
             dict: Dictionary containing average test loss, PSNR, and SSIM.
         """
+        #changing paths parameters
+        self.test_path = test_path
+        self.max_len_test =max_len_test
 
         # Check if the model has been trained
         if not self.trained:
@@ -740,8 +748,9 @@ class ModelBase(Module):
             ssim_dict = {'Val SSIM': history['ssim']}
             plot_metric(epochs, ssim_dict, title='SSIM over Epochs', xlabel='Epoch', ylabel='SSIM', test_value=test_results['ssim'], save_path=f"{save_path}_train_test_ssim.png" )
             self._log(f"Saved plot to {save_path}_train_test_ssim.png")
-    else:
-        raise ValueError(f"Result mode not supported. Choose when of 'training', 'testing', or 'both")
+
+        else:
+            raise ValueError(f"Result mode not supported. Choose when of 'training', 'testing', or 'both")
 
 
 

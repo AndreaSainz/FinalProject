@@ -32,7 +32,7 @@ def compute_psnr(mse, max_val=1.0):
         max_val (float, optional): Maximum possible pixel value (default: 1.0).
 
     Returns:
-        float: PSNR value in decibels (dB). Returns infinity if MSE is zero.
+        float: PSNR value. Returns infinity if MSE is zero.
     """
     # if mse is a tensor, extract the value
     if isinstance(mse, torch.Tensor):

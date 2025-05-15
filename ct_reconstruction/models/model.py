@@ -742,5 +742,25 @@ class ModelBase(Module):
             self._log(f"Saved plot to {save_path}_train_test_ssim.png")
     else:
         raise ValueError(f"Result mode not supported. Choose when of 'training', 'testing', or 'both")
-            
-            
+
+
+
+    def load_model(self, path=None):
+        """
+        Loads model weights from the specified file.
+
+        Args:
+            path (str, optional): Path to the model checkpoint. If None, uses self.model_path + '_best.pth'.
+
+        Raises:
+            FileNotFoundError: If the specified file does not exist.
+        """
+        if path is None:
+            path = f"{self.model_path}_best.pth"
+
+        if not os.path.exists(path):
+            self._log(f"Model file not found: {path}", level="error")
+            raise FileNotFoundError(f"Model file not found: {path}")
+
+        self.model.load_state_dict(torch.load(path, map_location=self.device))
+        self._log(f"Model weights loaded from {path}")

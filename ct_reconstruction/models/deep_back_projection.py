@@ -62,6 +62,7 @@ class DBP(ModelBase):
         super().__init__(training_path, validation_path, test_path, model_path, "DBP", n_single_BP, alpha, i_0, sigma, max_len_train, max_len_val, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, log_file)
 
         self.in_channels = in_channels
+
         # initial layer
         self.conv1 = self.initial_layer(in_channels=self.in_channels, out_channels=64, kernel_size=3, stride=1, padding=1)
 
@@ -166,3 +167,33 @@ class DBP(ModelBase):
         final_layer = self.final(middle)
 
         return final_layer
+
+
+    def save_config(self):
+        """
+        Saves model hyperparameters to a JSON config file for later restoration.
+        """
+        config = {
+            "model_type": self.model_type,
+            "model_path": self.model_path,
+            "in_channels": self.in_channels,
+            "n_single_BP": self.n_single_BP,
+            "alpha": self.alpha,
+            "i_0": self.i_0,
+            "sigma": self.sigma,
+            "max_len_train": self.max_len_train,
+            "max_len_val": self.max_len_val,
+            "batch_size": self.batch_size,
+            "epochs": self.epochs,
+            "optimizer_type": self.optimizer_type,
+            "loss_type": self.loss_type,
+            "learning_rate": self.learning_rate,
+            "debug": self.debug,
+            "seed": self.seed,
+            "scheduler": self.scheduler,
+            "log_file": self.logger.handlers[0].baseFilename if self.logger.handlers else "training.log"
+        }
+        with open(f"{self.model_path}_config.json", "w") as f:
+            json.dump(config, f, indent=4)
+
+        self._log(f"[DBP] Configuration saved to: {self.model_path}_config.json")

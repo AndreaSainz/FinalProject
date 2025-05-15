@@ -1,7 +1,7 @@
 import os
 import json
-from ...models.deep_back_projection import DBP
-from ...models.deep_filtered_back_projection import DeepFBP
+from ..models.deep_back_projection import DBP
+from ..models.deep_filtered_back_projection import DeepFBP
 
 MODEL_REGISTRY = {
     "DBP": DBP,
@@ -24,7 +24,7 @@ def open_config_file(path,debug):
         raise ValueError(f"File not found: {path}_config.json")
 
     # open file with configuration
-    with open(path, "r") as f:
+    with open(f"{path}_config.json", "r") as f:
         config = json.load(f)
 
     # print values for configurations if the user wants

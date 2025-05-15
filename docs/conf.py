@@ -1,6 +1,11 @@
 nbsphinx_kernel_name = 'python3'
 
 import sphinx_rtd_theme
+import os
+import sys
+import ct_reconstruction
+
+autodoc_mock_imports = ['tomosipo', 'pytorch_msssim']
 
 # -- Project information -----------------------------------------------------
 

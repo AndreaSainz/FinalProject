@@ -10,10 +10,8 @@ It includes datasets, model architectures, training pipelines, and evaluation to
 
 .. toctree::
    :maxdepth: 2
-   :caption: 📚 Contents:
+   :caption: API Reference
 
-   installation
-   usage
    material/datasets
    material/models
    material/utils
@@ -36,7 +34,7 @@ Features
 Installation
 ------------
 
-Ensure you have Python ≥3.10. Install the package and its dependencies with:
+Ensure you have Python ≥3.11. Install the package and its dependencies with:
 
 .. code-block:: bash
 

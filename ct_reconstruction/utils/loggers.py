@@ -2,16 +2,20 @@ import logging
 
 def configure_logger(name, log_file, debug= False) :
         """
-        Set up a logger that logs to both file and optionally console.
+        Configures and returns a logger that writes logs to a file and optionally to the console.
+
+        This logger is useful for consistent logging across modules. It ensures that duplicate
+        handlers are not added if the logger is called multiple times.
 
         Args:
-            name (str): Name of the logger (usually __name__).
-            log_file (str): Path to the log file.
-            debug (bool): If True, also logs to the console.
+            name (str): Logger name, typically set to `__name__` for module-level logging.
+            log_file (str): Path to the file where logs will be saved (in append mode).
+            debug (bool): If True, logs will also be printed to the console (stdout).
 
         Returns:
-            logging.Logger: Configured logger instance.
+            logging.Logger: Configured logger instance ready for use.
         """
+        
         logger = logging.getLogger(name)
         logger.setLevel(logging.INFO)
 

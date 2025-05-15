@@ -26,17 +26,38 @@ class DBP(ModelBase):
     """
     Deep Backprojection (DBP) network for CT reconstruction.
 
-    Inherits from ModelBase and implements a CNN architecture.
+    This class defines a CNN-based architecture for reconstructing CT images
+    from single backprojection inputs. It inherits the training, evaluation,
+    and utility methods from ModelBase.
 
     Architecture:
-        - Initial Conv2d + ReLU layer.
-        - 15 repeated Conv2d + BatchNorm2d + ReLU blocks.
-        - Final Conv2d layer producing single-channel output.
+        - Initial block: Conv2d + ReLU
+        - Middle blocks: 15 × (Conv2d + BatchNorm2d + ReLU)
+        - Final layer: Conv2d (1 output channel)
+
+    Args:
+        in_channels (int): Number of input channels (e.g., number of BPs per sample).
+        training_path (str): Path to the training dataset.
+        validation_path (str): Path to the validation dataset.
+        test_path (str): Path to the test dataset.
+        model_path (str): Path to save model weights and logs.
+        n_single_BP (int): Number of backprojections per sample.
+        alpha (float): Normalization factor.
+        i_0 (float): Incident X-ray intensity.
+        sigma (float): Standard deviation of noise.
+        max_len_train (int): Max number of training samples to load.
+        max_len_val (int): Max number of validation samples to load.
+        batch_size (int): Number of samples per batch.
+        epochs (int): Number of training epochs.
+        learning_rate (float): Initial learning rate.
+        debug (bool): Whether to enable debug mode.
+        seed (int): Random seed for reproducibility.
+        log_file (str): Path to log file.
     """
 
 
     def __init__(self, in_channels, training_path, validation_path, test_path, model_path, n_single_BP, alpha, i_0, sigma, max_len_train, max_len_val, batch_size, epochs, learning_rate, debug, seed, log_file):
-        
+
         # Initialize the base training infrastructure
         super().__init__(training_path, validation_path, test_path, model_path, "DBP", n_single_BP, alpha, i_0, sigma, max_len_train, max_len_val, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, log_file)
 
@@ -56,10 +77,19 @@ class DBP(ModelBase):
 
     def initial_layer(self, in_channels, out_channels, kernel_size, stride, padding):
         """
-        Creates the initial convolutional layer with ReLU activation.
-        
+        Constructs the initial convolutional block of the network.
+
+        This block consists of a Conv2d followed by a ReLU activation.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            kernel_size (int): Size of the convolution kernel.
+            stride (int): Stride for the convolution.
+            padding (int): Zero-padding added to both sides.
+
         Returns:
-            Sequential: Sequential model with Conv2d + ReLU.
+            nn.Sequential: Sequential block with Conv2d + ReLU.
         """
         initial = Sequential(Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding), ReLU(inplace=True))
         return initial
@@ -68,10 +98,19 @@ class DBP(ModelBase):
 
     def conv_block(self, in_channels, out_channels, kernel_size, stride, padding):
         """
-        Creates a convolutional block with Conv2d, BatchNorm2d, and ReLU.
-        
+        Constructs a middle convolutional block used in the DBP network.
+
+        This block includes Conv2d, BatchNorm2d, and ReLU activation.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            kernel_size (int): Size of the convolution kernel.
+            stride (int): Stride for the convolution.
+            padding (int): Zero-padding added to both sides.
+
         Returns:
-            Sequential: Sequential model with Conv2d + BatchNorm2d + ReLU.
+            nn.Sequential: Sequential block with Conv2d + BatchNorm2d + ReLU.
         """
         convolution = Sequential(Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding), BatchNorm2d(out_channels), ReLU(inplace=True))
         return convolution
@@ -80,10 +119,19 @@ class DBP(ModelBase):
 
     def final_layer(self, in_channels, out_channels, kernel_size, stride, padding):
         """
-        Creates the final convolutional layer without activation.
+        Constructs the final convolutional layer that maps to a single-channel output.
+
+        This layer does not apply any activation function.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels (usually 1).
+            kernel_size (int): Size of the convolution kernel.
+            stride (int): Stride for the convolution.
+            padding (int): Zero-padding added to both sides.
 
         Returns:
-            Conv2d: Output Conv2d layer.
+            nn.Conv2d: Final convolutional layer.
         """
         final = Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
         return final
@@ -91,6 +139,21 @@ class DBP(ModelBase):
 
 
     def forward(self, x):
+        """
+        Defines the forward pass of the DBP network.
+
+        Applies:
+            - Initial convolution
+            - 15 repeated conv blocks
+            - Final convolutional layer
+
+        Args:
+            x (Tensor): Input tensor of shape (B, C, H, W).
+
+        Returns:
+            Tensor: Reconstructed image of shape (B, 1, H, W).
+        """
+
         # initial part
         conv1 = self.conv1(x)
 

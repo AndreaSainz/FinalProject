@@ -9,19 +9,31 @@ import gcsfs
 import math
 
 class LoDoPaBDataset(Dataset):
-
     """
-    PyTorch Dataset for low-dose CT reconstruction using sinograms from the data base LoDoPaB-CT.
-    Simulates noisy measurements and provides input-target pairs for deep learning models.
+    PyTorch Dataset for low-dose CT reconstruction using LoDoPaB-CT data.
+
+    This dataset:
+    - Loads ground truth slices from HDF5 files (local or GCS).
+    - Computes forward projections (sinograms).
+    - Simulates realistic noise (Poisson + Gaussian).
+    - Produces sparse-view backprojections at predefined angles.
+
+    Designed for training deep learning models in CT image reconstruction.
 
     Args:
-        ground_truth_dir (str): Path to directory with HDF5 files containing ground truth images.
-        n_single_BP (int): Number of single-angle backprojections to generate.
-        i_0 (float): Incident X-ray photon count (controls Poisson noise).
-        sigma (float): Standard deviation of additive Gaussian noise.
+        ground_truth_dir (str): Path to directory containing HDF5 files with CT slices (can be local or 'gs://').
+        vg (ts.VolumeGeometry): tomosipo volume geometry.
+        angles (np.ndarray): Array of angles used for projection.
+        pg (ts.ProjectionGeometry): tomosipo projection geometry.
+        A (ts.Operator): tomosipo forward operator.
+        n_single_BP (int): Number of single-angle backprojections to simulate.
+        alpha (float): Normalization factor for ground truth scaling.
+        i_0 (float): Incident photon count (for Poisson noise).
+        sigma (float): Standard deviation of Gaussian noise.
         seed (int): Random seed for reproducibility.
-        max_len : 
-        debug (bool): If True, prints debug information during execution.
+        max_len (int, optional): Maximum number of samples to load. If None, uses all slices.
+        debug (bool): If True, prints debug logs to console.
+        logger (logging.Logger, optional): Logger instance. If None, a default is created.
     """
 
 
@@ -115,7 +127,12 @@ class LoDoPaBDataset(Dataset):
 
 
     def __len__(self):
-        """Return the number of samples in the dataset that are going to be used"""
+        """
+        Returns the number of samples available in the dataset (or max_len if set).
+
+        Returns:
+            int: Number of total accessible samples.
+        """
         total = len(self.files) * self.slices_per_file  
         return min(total, self.max_len) if self.max_len is not None else total
 
@@ -123,6 +140,13 @@ class LoDoPaBDataset(Dataset):
 
 
     def __repr__(self):
+        """
+        Returns a string summary of the dataset configuration.
+
+        Returns:
+            str: Dataset description.
+        """
+
         return (f"LoDoPaBDataset(num_samples={len(self)}, "
                 f"n_single_BP={self.n_single_BP}, "
                 f"noise=Poisson+Gaussian(σ={self.sigma}), "
@@ -131,13 +155,17 @@ class LoDoPaBDataset(Dataset):
 
     def noise(self, sinogram):
         """
-        Adds Poisson and Gaussian noise to a clean sinogram.
+        Adds Poisson and Gaussian noise to a sinogram.
+
+        Simulates realistic CT measurement noise using:
+            - Poisson noise (from X-ray photon counts).
+            - Gaussian noise (detector and system noise).
 
         Args:
-            sinogram (torch.Tensor): Clean sinogram.
+            sinogram (torch.Tensor): Clean input sinogram.
 
         Returns:
-            torch.Tensor: Noisy sinogram.
+            torch.Tensor: Noisy sinogram of the same shape.
         """
         
         #Initilizing seed for reproducibility porpuses
@@ -165,13 +193,15 @@ class LoDoPaBDataset(Dataset):
 
     def _get_image_from_file(self, idx):
         """
-        Loads a specific image slice given a global index.
+        Recovers a normalized image slice given a global dataset index.
+
+        Loads the appropriate HDF5 file and extracts the corresponding slice.
 
         Args:
-            idx (int): Global index across all slices.
+            idx (int): Global index across all available slices.
 
         Returns:
-            torch.Tensor: Normalized image of shape (1, H, W)
+            torch.Tensor: Image tensor of shape (1, H, W), normalized to [0, alpha].
         """
 
         #Calculating the file number. The idx will be a number between 0 and 128*number of files (because each file contains 128 images)
@@ -209,13 +239,15 @@ class LoDoPaBDataset(Dataset):
 
     def _generate_single_backprojections(self, sinogram):
         """
-        Generates sparse-view backprojections at n_single_BP selected angles.
+        Generates a set of backprojections from selected angles for sparse-view simulation.
+
+        Each angle is used to generate a single-angle backprojection using tomosipo.
 
         Args:
-            sinogram (torch.Tensor): Clean sinogram.
+            sinogram (torch.Tensor): Noisy sinogram of shape (1, num_angles, num_detectors).
 
         Returns:
-            torch.Tensor: Tensor of shape (n_single_BP, H, W) with individual backprojections.
+            torch.Tensor: Stack of backprojections of shape (n_single_BP, H, W).
         """
 
         projections = []
@@ -243,18 +275,25 @@ class LoDoPaBDataset(Dataset):
 
     def __getitem__(self, idx):
         """
-        Returns the training sample at the specified index.
+        Returns one training sample consisting of:
+            - Ground truth image.
+            - Clean sinogram.
+            - Noisy sinogram.
+            - Set of single-angle backprojections.
 
         Args:
-            idx (int): Index of sample.
+            idx (int): Index of the sample to retrieve.
 
         Returns:
             dict: {
-                'ground_truth': Ground truth image (1, H, W),
-                'sinogram': Clean sinogram,
-                'noisy_sinogram': Sinogram with noise,
-                'single_back_projections': [n_single_BP, H, W]
+                'ground_truth' (torch.Tensor): Image tensor (1, H, W),
+                'sinogram' (torch.Tensor): Clean sinogram (1, A, D),
+                'noisy_sinogram' (torch.Tensor): Noisy sinogram (1, A, D),
+                'single_back_projections' (torch.Tensor): Tensor of shape (n_single_BP, H, W)
             }
+
+        Raises:
+            IndexError: If idx is out of range for max_len.
         """
 
         #checking the index when I do not want all the files

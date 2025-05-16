@@ -69,16 +69,6 @@ git clone git@gitlab.developers.cam.ac.uk:phy/data-intensive-science-mphil/asses
 ```
 
 #### Environment
-FOR MAC WITH APPLE SILICON:
-
-CONDA_SUBDIR=osx-64 conda create -n tomosipo python=3.9
-conda install astra-toolbox/label/dev::astra-toolbox
-conda install aahendriksen::tomosipo
-conda install pytorch
-conda install h5py
-
-
-
 To set up the environment for this project, first, ensure Python 3.9 is installed on your system. You can verify this by running 
 
 ```bash
@@ -88,27 +78,22 @@ in your terminal.
 
 If it is not installed, download it from <https://www.python.org/> or use your system’s package manager.
 
-Then, create a virtual environment using 
+Then, create a conda environment using
+
+**FOR MAC WITH APPLE SILICON**:
 
 ```bash
-python3.9 -m venv venv 
+CONDA_SUBDIR=osx-64 conda create -n tomosipo_env python=3.9
 ```
-and activate it by running 
+
+**For Linux/Windows with NVIDIA GPU**: 
+Make sure you know your CUDA version (e.g., 11.8). Then:
 
 ```bash
-source venv/bin/activate 
+conda create -n tomosipo cudatoolkit=<X.X> tomosipo -c defaults -c astra-toolbox -c aahendriksen
 ```
-When you are done working, deactivate the environment by running 
 
-```bash
-deactivate
-```
-Alternatively, if you prefer to use Conda, you can create the environment with 
-
-```bash
-conda create -n my_env python=3.9
-```
-and activate it with  
+Once the environment was created:
 
 ```bash
 conda activate my_env 
@@ -120,21 +105,15 @@ conda deactivate
 ```
 
 #### Requirements 
-Once activated, update pip with 
+Once **activated**, install all the requirements:
 
 ```bash
-pip install --upgrade pip 
+conda env update -f environment.yml
 ```
-and install the required dependencies listed in the requirements.txt file using 
-
-```bash
-pip install -r requirements.txt
-```
-
 At this point, you are prepared to execute the Jupyter notebooks with the coursework. 
 
 ## Documentation
-In addition to the Python dependencies listed in `requirements.txt`, you need to have **Pandoc** installed for building the Sphinx documentation.
+In addition to the Python dependencies, you need to have **Pandoc** installed for building the Sphinx documentation.
 
 Follow the instructions below to install Pandoc based on your operating system:
 

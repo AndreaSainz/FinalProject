@@ -57,7 +57,7 @@ class EarlyStopping:
             val_loss (float): Current validation loss.
             model (torch.nn.Module): The model being trained.
         """
-        # Convert loss to score (lower is better)
+        # convert loss to score (lower is better) : want we really want is to maximize 
         score = -val_loss
 
         # First epoch: save model and initialize best score

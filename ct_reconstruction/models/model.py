@@ -1,4 +1,5 @@
 import tomosipo as ts
+from ts_algorithms import fbp, fdk, sirt, em, tv_min2d, nag_ls
 import torch
 from torch.nn import Module
 from torch.nn import MSELoss
@@ -7,7 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ..datasets.dataset import LoDoPaBDataset
 from ..callbacks.early_stopping import EarlyStopping
 from ..utils.metrics import compute_psnr, compute_ssim
-from ..utils.plotting import show_example, plot_metric
+from ..utils.plotting import show_example, plot_metric, plot_different_reconstructions
 from ..utils.loggers import configure_logger
 from torch.utils.data import DataLoader
 import time
@@ -20,40 +21,38 @@ import matplotlib.pyplot as plt
 import logging
 from accelerate import Accelerator
 import os
+import gc
 
 
 class ModelBase(Module):
     """
-    Abstract base class for CT reconstruction model training, evaluation, and testing.
+    Abstract base class for CT reconstruction model training, evaluation, and analysis.
 
-    This class provides a general framework to:
-    - Load CT datasets and reconstruction operators
-    - Train deep learning models using PyTorch
-    - Evaluate performance via PSNR, SSIM, and loss
-    - Save/load predictions and metrics
-    - Plot performance metrics over epochs
+    This class provides a unified framework for:
+    - Setting up volume and projection geometries using Tomosipo package.
+    - Loading CT datasets and preprocessing them.
+    - Training deep learning models with optional early stopping and scheduler.
+    - Evaluating model performance using PSNR, SSIM, and MSE loss.
+    - Visualizing metrics and reconstructed outputs.
+    - Running classical CT reconstruction algorithms (e.g., FBP, SIRT, TV-Min).
+
+    This class is intended to be subclassed with a specific model defined in `self.model`.
 
     Attributes:
-        training_path (str): Path to the training dataset.
-        validation_path (str): Path to the validation dataset.
-        test_path (str): Path to the test dataset.
-        model_path (str): Path to save trained models and logs.
-        model_type (str): Name or identifier of the model architecture.
+        model_path (str): Path prefix to save checkpoints, logs, and metrics.
+        model_type (str): Name/identifier for the model architecture (used for logging and plotting).
         n_single_BP (int): Number of single backprojections per sample.
-        alpha (float): Normalization factor used for scaling.
-        i_0 (float): Incident X-ray intensity for noise modeling.
-        sigma (float): Standard deviation of the noise.
-        max_len_train (int): Max number of training samples to load.
-        max_len_val (int): Max number of validation samples to load.
-        batch_size (int): Number of samples per batch.
-        epochs (int): Total number of training epochs.
-        optimizer_type (str): Optimizer type (e.g., "Adam", "AdamW").
-        loss_type (str): Loss function name (e.g., "MSELoss").
-        learning_rate (float): Initial learning rate.
-        debug (bool): Whether to print debug messages.
-        seed (int): Random seed for reproducibility.
-        scheduler (bool): Whether to use a learning rate scheduler.
-        log_file (str): Path to the model logger.
+        alpha (float): Normalization factor for PSNR computation.
+        i_0 (float): Incident X-ray intensity used in noise modeling.
+        sigma (float): Standard deviation of Gaussian noise applied to sinograms.
+        batch_size (int): Batch size for training and evaluation.
+        epochs (int): Maximum number of training epochs.
+        optimizer_type (str): Optimizer type, e.g., "Adam", "AdamW".
+        loss_type (str): Loss function type, e.g., "MSELoss".
+        learning_rate (float): Learning rate for optimizer.
+        debug (bool): Enables verbose logging.
+        seed (int): Random seed for full reproducibility.
+        scheduler (bool): Enables learning rate scheduling with ReduceLROnPlateau.
     """
 
     def __init__(self, model_path, model_type, n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, scheduler = True, log_file='training.log'):
@@ -108,7 +107,6 @@ class ModelBase(Module):
         self.dataset_logger = configure_logger("ct_reconstruction.dataset", log_file, debug=False)
         
         # set the device once for the whole class
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = self.accelerator.device
 
         
@@ -241,16 +239,16 @@ class ModelBase(Module):
 
     def train_one_epoch(self, train_dataloader, opt, loss, e):
         """
-        Performs one full training epoch on the dataset.
+        Trains the model for a single epoch.
 
         Args:
-            train_dataloader (DataLoader): DataLoader for training data.
-            opt (Optimizer): Optimizer used for model updates.
+            train_dataloader (DataLoader): Dataloader for training data.
+            opt (torch.optim.Optimizer): Optimizer used for weight updates.
             loss (nn.Module): Loss function.
-            e (int): Current epoch index (for logging).
+            e (int): Epoch index (for logging or debugging).
 
         Returns:
-            float: Total accumulated training loss.
+            float: Total accumulated loss over the epoch.
         """
         # set the model in training mode
         self.model.train()
@@ -285,13 +283,13 @@ class ModelBase(Module):
 
     def validation(self, val_dataloader, loss, mse_fn, e):
         """
-        Evaluates model performance on validation data.
+        Evaluates the model on the validation dataset.
 
         Args:
-            val_dataloader (DataLoader): Validation DataLoader.
-            loss (nn.Module): Loss function.
-            mse_fn (nn.Module or None): MSE function, used for PSNR calculation.
-            e (int): Current epoch index.
+            val_dataloader (DataLoader): Dataloader for validation data.
+            loss (nn.Module): Primary loss function used for training.
+            mse_fn (nn.Module or None): Optional MSELoss for PSNR calculation.
+            e (int): Epoch index (used in progress bar).
 
         Returns:
             tuple: (total_val_loss, total_psnr, total_ssim)
@@ -338,14 +336,18 @@ class ModelBase(Module):
 
     def train(self, training_path, validation_path, max_len_train = None, max_len_val=None, patience=10, confirm_train=False):
         """
-        Full training loop including early stopping, metric logging, and scheduler.
+        Performs full training with early stopping, metric logging, and learning rate scheduling.
 
         Args:
-            patience (int): Early stopping patience in epochs.
-            confirm_train (bool): Whether to require user confirmation before training.
+            training_path (str): Path to the training dataset.
+            validation_path (str): Path to the validation dataset.
+            max_len_train (int, optional): Maximum number of training samples.
+            max_len_val (int, optional): Maximum number of validation samples.
+            patience (int): Number of epochs to wait for improvement before early stopping.
+            confirm_train (bool): Ask for user confirmation before starting training.
 
         Returns:
-            dict: Training history with loss and metrics per epoch.
+            dict: Training history with average loss, PSNR, and SSIM per epoch.
         """
         #changing paths parameters
         self.training_path = training_path
@@ -446,6 +448,16 @@ class ModelBase(Module):
                 "val_loss": f"{avg_val_loss:.6f}"
             })
 
+            #Clean memory
+            gc.collect()
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+
+            elif torch.backends.mps.is_available():
+                torch.mps.empty_cache()
+
 
         # change model training 
         self.trained = True
@@ -516,6 +528,7 @@ class ModelBase(Module):
         # save ground truth and predictions
         gt_images = []
         predictions = []
+        noisy_sinograms = []
 
         # switch off autograd for evaluation
         with torch.no_grad():
@@ -533,6 +546,7 @@ class ModelBase(Module):
                 # send the input to the device
                 ground_truth = batch['ground_truth']
                 single_back_projections = batch['single_back_projections']
+                noisy_sino = batch['noisy_sinogram']
 
                 # make the predictions and calculate the validation loss
                 pred = self.model(single_back_projections)
@@ -554,23 +568,36 @@ class ModelBase(Module):
                 # save gound truth and prediction
                 predictions.append(pred.cpu())
                 gt_images.append(ground_truth.cpu())
+                noisy_sinograms.append(noisy_sino.cpu())
 
-        return predictions, gt_images, total_test_loss, total_psnr, total_ssim
+                #Clean memory
+                gc.collect()
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+
+                elif torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+
+        return predictions, gt_images, noisy_sinograms, total_test_loss, total_psnr, total_ssim
 
 
     def test(self, test_path, max_len_test=None):
         """
-        Tests the trained model on the test set and saves predictions and metrics.
+        Runs evaluation on the test dataset and saves predictions, metrics, and sinograms.
 
         Args:
-            max_len_test (int): Maximum number of test samples to load.
+            test_path (str): Path to the test dataset.
+            max_len_test (int, optional): Max number of test samples to use.
 
         Returns:
-            dict: Dictionary containing average test loss, PSNR, and SSIM.
+            dict: Dictionary with average test loss, PSNR, and SSIM.
         """
+
         #changing paths parameters
         self.test_path = test_path
-        self.max_len_test =max_len_test
+        self.max_len_test = max_len_test
 
         # Check if the model has been trained
         if not self.trained:
@@ -594,7 +621,7 @@ class ModelBase(Module):
         model, loss, test_dataloader = self.accelerator.prepare(self.model, self.loss_fn, test_dataloader)
 
         # call evaliation function
-        predictions, gt_images, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)
+        predictions, gt_images, noisy_sinograms, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)
         
     
         # training history
@@ -612,8 +639,10 @@ class ModelBase(Module):
         # save predictions and ground truth
         torch.save(torch.cat(predictions), f"{self.model_path}_predictions_images.pt")
         torch.save(torch.cat(gt_images), f"{self.model_path}_ground_truth_images.pt")
+        torch.save(torch.cat(noisy_sinograms), f"{self.model_path}_noisy_sinograms.pt")
         self._log(f"Predictions saved to {self.model_path}_predictions_images.pt")
-        self._log(f"Predictions saved to {self.model_path}_ground_truth_images.pt")
+        self._log(f"Ground Truth images saved to {self.model_path}_ground_truth_images.pt")
+        self._log(f"Noisy sinograms saved to {self.model_path}_noisy_sinograms.pt")
 
         # save metrics to file
         with open(f'{self.model_path}_test_metrics.json', 'w') as f:
@@ -630,29 +659,26 @@ class ModelBase(Module):
 
     def results(self, mode, example_number = 0, save_path=None):
         """
-        Visualizes and logs training and/or test results using stored metrics and predictions.
+        Visualizes and logs training and/or test results.
 
-        This function can generate plots for:
-        - Training: loss, PSNR, and SSIM over epochs.
-        - Testing: numerical results and qualitative visual comparisons.
-        - Both: combines training and test metrics in the same plots (with test metric as a horizontal line).
-
-        For testing mode, random image samples are displayed for visual inspection.
+        This includes:
+        - Loss, PSNR, SSIM over epochs for training.
+        - Quantitative and visual results from testing.
+        - Optional combination of both in one analysis.
 
         Args:
-            mode (str): One of 'training', 'testing', or 'both'.
+            mode (str): One of ['training', 'testing', 'both'].
             example_number (int): Number of test examples to visualize.
-            save_path (str, optional): Path to save result plots. Defaults to current directory.
+            save_path (str, optional): Base path for saving generated plots.
 
-        Raises:
-            ValueError: If `mode` is not one of the accepted values.
-            FileNotFoundError: If required metrics or predictions files are missing.
+        Returns:
+            list[int] or None: Indices of plotted test examples (only for testing mode).
         """
-
+        # checking if the model has been trained before
         if not self.trained:
             self._log(f"This model is not trained yet.",  level='warning')
             return
-            
+        
         if mode == "training":
             # handling file path error
             if not os.path.exists(f"{self.model_path}_metrics.json"):
@@ -689,10 +715,12 @@ class ModelBase(Module):
             if not os.path.exists(f"{self.model_path}_test_metrics.json"):
                 self._log(f"File not found: {self.model_path}_test_metrics.json", level='error')
                 return None
-            elif not os.path.exists(f"{self.model_path}_predictions_images.pt") or not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
-                self._log("Prediction or ground truth .pt files not found", level="error")
+            elif not os.path.exists(f"{self.model_path}_predictions_images.pt"):
+                self._log("Predictions .pt files not found", level="error")
                 return
-
+            elif not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
+                self._log("Ground truth .pt files not found", level="error")
+                return
             else:
                 with open(f'{self.model_path}_test_metrics.json', 'r') as f:
                     test_results = json.load(f)
@@ -710,14 +738,15 @@ class ModelBase(Module):
             samples = random.sample(range(0, len(predictions)), example_number)
 
             for example in samples:
-                self.show_example(predictions[example], ground_truths[example])
+                show_example(predictions[example], ground_truths[example])
+
+            return samples
                 
 
 
         elif mode == "both":
             # handling file path error
             if not os.path.exists(f"{self.model_path}_test_metrics.json"):
-                
                 self._log(f"File not found: {self.model_path}_test_metrics.json", level='error')
                 return None
 
@@ -755,6 +784,94 @@ class ModelBase(Module):
 
 
 
+
+    def other_ct_reconstruction(self, sinogram, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
+        """
+        Performs CT image reconstruction using multiple algorithms provided by TomoSipo.
+
+        Args:
+            sinogram (torch.Tensor): The measured projection data (sinogram).
+            num_iterations_sirt (int): Number of iterations for SIRT reconstruction.
+            num_iterations_em (int): Number of iterations for Expectation Maximization.
+            num_iterations_tv_min (int): Number of iterations for Total Variation minimization.
+            num_iterations_nag_ls (int): Number of iterations for NAG-LS method.
+            lamda (float): Regularization parameter for TV minimization (TV-L2 model).
+
+        Returns:
+            dict: Dictionary containing reconstructed images from each method:
+                {   "fbp": <Tensor>,
+                    "sirt": <Tensor>,
+                    "em": <Tensor>,
+                    "tv_min": <Tensor>,
+                    "nag_ls": <Tensor> }
+        
+        Note:
+            FDK is not included in this method as it is designed for 3D cone-beam geometry,
+            which is not compatible with the current fan-beam setup.
+        """
+        # Filtered Backprojection (FBP) reconstruction
+        rec_fbp = fbp(self.A, sinogram)
+        #Simultaneous Iterative Reconstruction Technique (SIRT)
+        rec_sirt = sirt(self.A, sinogram, num_iterations_sirt)
+        # Expectation Maximization (EM) reconstruction
+        rec_em = em(self.A, sinogram, num_iterations_em)
+        #Total Variation regularized least squares using Chambolle-Pock algorithm
+        rec_tv_min = tv_min2d(self.A, sinogram, lamda, num_iterations_tv_min)
+        #Nesterov Accelerated Gradient for Least Squares reconstruction 
+        rec_nag_ls = nag_ls(self.A, sinogram, num_iterations_nag_ls)
+
+        return { "fbp": rec_fbp,
+            "sirt": rec_sirt,
+            "em": rec_em,
+            "tv_min": rec_tv_min,
+            "nag_ls": rec_nag_ls}
+
+
+
+    def report_results(self, save_path, samples, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
+        """
+        Generates and saves visual comparisons between model predictions, ground truth, 
+        and multiple classical CT reconstruction methods.
+
+        Args:
+            save_path (str): Path prefix where the output images will be saved.
+            samples (list of int): Indices of test samples to visualize.
+            num_iterations_sirt (int): Iterations for SIRT reconstruction.
+            num_iterations_em (int): Iterations for EM reconstruction.
+            num_iterations_tv_min (int): Iterations for TV minimization.
+            num_iterations_nag_ls (int): Iterations for NAG-LS.
+            lamda (float): Regularization parameter for TV minimization.
+
+        Raises:
+            RuntimeError: If required .pt files (predictions, sinograms, etc.) are missing.
+        """
+        # handling file path error
+        if not self.trained:
+            self._log(f"This model is not trained yet.",  level='warning')
+            return
+        if not os.path.exists(f"{self.model_path}_predictions_images.pt"):
+            self._log("Prediction .pt files not found", level="error")
+            return
+        elif not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
+            self._log("Ground truth .pt files not found", level="error")
+            return
+
+        elif not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
+            self._log("Noisy sinograms .pt files not found", level="error")
+            return
+        else:
+            predictions = torch.load(f"{self.model_path}_predictions_images.pt")
+            ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
+            sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
+
+        # generate and save all plots (model reconstructed image, gt image and classical methods reconstrucstions)
+        for sample in samples:
+            reconstructions_dict = self.other_ct_reconstruction(sinograms[sample], num_iterations_sirt, num_iterations_em, num_iterations_tv_min, num_iterations_nag_ls, lamda)
+            plot_different_reconstructions(self.model_type, sample, reconstructions_dict, predictions[sample], ground_truths[sample], save_path)
+
+
+
+
     def load_model(self, path=None):
         """
         Loads model weights from the specified file.
@@ -765,6 +882,10 @@ class ModelBase(Module):
         Raises:
             FileNotFoundError: If the specified file does not exist.
         """
+        # we first need to check if we create correctly the model
+        if self.model is None:
+            raise ValueError("Model instance is not initialized. Set self.model before loading weights.")
+
         if path is None:
             path = f"{self.model_path}_best.pth"
 

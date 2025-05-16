@@ -84,19 +84,29 @@ Then, create a conda environment using
 
 ```bash
 CONDA_SUBDIR=osx-64 conda create -n tomosipo_env python=3.9
+conda activate tomosipo_env 
+```
+Then install the dependecies:
+
+```bash
+conda install -c astra-toolbox/label/dev astra-toolbox
+conda install -c aahendriksen tomosipo
 ```
 
 **For Linux/Windows with NVIDIA GPU**: 
-Make sure you know your CUDA version (e.g., 11.8). Then:
+Create everything at once. Make sure you know your CUDA version (e.g., 11.8). Then:
 
 ```bash
-conda create -n tomosipo cudatoolkit=<X.X> tomosipo -c defaults -c astra-toolbox -c aahendriksen
+conda create -n tomosipo_env cudatoolkit=<X.X> tomosipo -c defaults -c astra-toolbox -c aahendriksen
+conda activate tomosipo_env 
 ```
 
-Once the environment was created:
+The specific commmands for the environment are:
+
+For activating the environment:
 
 ```bash
-conda activate my_env 
+conda activate tomosipo_env 
 ```
 When you are done working, deactivate the environment by running 
 

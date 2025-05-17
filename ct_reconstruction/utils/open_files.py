@@ -59,6 +59,9 @@ def load_model_from_config(config_path, debug):
     # take the correct model
     ModelClass = MODEL_REGISTRY[model_type]
 
+    # remove unwanted entries
+    config.pop("model_type", None)
+
     # initilize the model
     model = ModelClass(**config)
 

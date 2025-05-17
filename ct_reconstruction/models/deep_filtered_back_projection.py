@@ -6,6 +6,7 @@ from torch.nn import ReLU
 from torch.nn import BatchNorm2d
 from torch.nn import Sequential
 from torch.nn import MSELoss
+from torch.nn import Parameter
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ..datasets.dataset import LoDoPaBDataset
@@ -23,6 +24,7 @@ import os
 
 class DeepFBP(ModelBase):
     """
+    x: sinogram in this case
     Deep Filtered Back Projection (DeepFBP) network for CT reconstruction.
 
     Inherits from ModelBase and implements a mixture architecture.
@@ -38,7 +40,29 @@ class DeepFBP(ModelBase):
         
         # Initialize the base training infrastructure
         super().__init__(model_path, "DeepFBP", n_single_BP, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
-        self.model = self
+
+        # for python to know the parameters are learnable they should be define inside an nn.Module in init
+        # initialize the filter as the 
+        ram_lak = torch.abs(ftt1d_shiffted)
+
+        # telling pyhton that the filter is learnable 
+        self.learnable_filter = Parameter(ram_lak.clone().detach())
+        self.model = 
+
+    def filter1(self,x):
+        # 1D Fast Fourier Transform
+        ftt1d = torch.fft.fft(x, dim=-1)
+
+        # Shift transformation
+        ftt1d_shiffted = torch.fft.fftshift(ftt1d)
+
+        # filtering values
+        filter_ftt1d_shiffted= ftt1d_shiffted*self.learnable_filter
+
+        # transforming back to sinogram
+        filter_sinogram = torch.fft.ifft(filter_ftt1d_shiffted, dim=-1).real
+
+        return filter_sinogram
 
     def forward(self, x):
     

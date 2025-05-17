@@ -49,7 +49,7 @@ def compute_psnr(mse, max_val=1.0):
 
 
 
-def compute_ssim(reconstructed, reference):
+def compute_ssim(reconstructed, ground_truth, data_range):
     """
     Computes the Structural Similarity Index (SSIM) between two images.
 
@@ -58,10 +58,10 @@ def compute_ssim(reconstructed, reference):
 
     Args:
         reconstructed (torch.Tensor): Reconstructed image tensor of shape (B, C, H, W).
-        reference (torch.Tensor): Ground truth image tensor of shape (B, C, H, W).
+        ground_truth (torch.Tensor): Ground truth image tensor of shape (B, C, H, W).
 
     Returns:
         float: SSIM value between -1 and 1. A value of 1 indicates perfect similarity.
     """
     # both inputs must be shape [B, C, H, W]
-    return ssim(reconstructed, reference).item()
+    return ssim(reconstructed, ground_truth, data_range).item()

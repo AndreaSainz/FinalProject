@@ -59,13 +59,13 @@ For the correct operation of the coursework follow the following steps.
 Clone the repository to your local machine using :
 
 ```bash
-git clone https://gitlab.developers.cam.ac.uk/phy/data-intensive-science-mphil/assessments/m1_coursework/as3628.git
+git clone https://gitlab.developers.cam.ac.uk/phy/data-intensive-science-mphil/assessments/projects/as3628.git
 ```
 
 or 
 
 ```bash
-git clone git@gitlab.developers.cam.ac.uk:phy/data-intensive-science-mphil/assessments/m1_coursework/as3628.git
+git clone git@gitlab.developers.cam.ac.uk:phy/data-intensive-science-mphil/assessments/projects/as3628.git
 ```
 
 #### Environment

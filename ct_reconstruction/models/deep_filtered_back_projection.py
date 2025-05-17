@@ -49,7 +49,6 @@ class DeepFBP(ModelBase):
         Saves model hyperparameters to a JSON config file for later restoration.
         """
         config = {
-            "model_type": self.model_type,
             "model_path": self.model_path,
             "n_single_BP": self.n_single_BP,
             "alpha": self.alpha,

@@ -328,7 +328,7 @@ class ModelBase(Module):
                     mse_val = mse_fn(pred, ground_truth).item()
 
                 total_psnr += compute_psnr(mse_val, self.alpha)
-                total_ssim += compute_ssim(pred, ground_truth)
+                total_ssim += compute_ssim(pred, ground_truth, self.alpha)
         
         return total_val_loss, total_psnr, total_ssim
 
@@ -563,7 +563,7 @@ class ModelBase(Module):
                     mse_val = mse_fn(pred, ground_truth).item()
 
                 total_psnr += compute_psnr(mse_val, self.alpha)
-                total_ssim += compute_ssim(pred, ground_truth)
+                total_ssim += compute_ssim(pred, ground_truth, self.alpha)
 
                 # save gound truth and prediction
                 predictions.append(pred.cpu())

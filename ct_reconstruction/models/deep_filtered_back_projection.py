@@ -1,9 +1,9 @@
 import torch
 from torch.nn import Module
 from torch.nn import ModuleList
-from torch.nn import Conv2d
-from torch.nn import ReLU
-from torch.nn import BatchNorm2d
+from torch.nn import Conv1d
+from torch.nn import PReLU
+from torch.nn import BatchNorm1d
 from torch.nn import Sequential
 from torch.nn import MSELoss
 from torch.nn import Parameter
@@ -65,20 +65,41 @@ class DeepFBP(ModelBase):
         return filter_sinogram
 
     def filter2(self,x):
-        # 1D Fast Fourier Transform
-        ftt1d = torch.fft.fft(x, dim=-1)
+        # 1D Fast Fourier Transform (one per angle)
+        ftt1d = torch.fft.fft(x)
 
-        # Shift transformation
+        # Shift transformation 
         ftt1d_shiffted = torch.fft.fftshift(ftt1d)
 
-        # filtering values
+        # filtering values 
         filter_ftt1d_shiffted= ftt1d_shiffted*self.learnable_filter
 
         # transforming back to sinogram
-        filter_sinogram = torch.fft.ifft(filter_ftt1d_shiffted, dim=-1).real
+        filter_sinogram = torch.fft.ifft(filter_ftt1d_shiffted).real
 
         return filter_sinogram
 
+
+    def int_residual_block(self, in_channels, out_channels, kernel_size, stride, padding):
+        """
+        Constructs a middle convolutional block used in the DBP network.
+
+        This block includes Conv2d, BatchNorm2d, and ReLU activation.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            kernel_size (int): Size of the convolution kernel.
+            stride (int): Stride for the convolution.
+            padding (int): Zero-padding added to both sides.
+
+        Returns:
+            nn.Sequential: Sequential block with Conv2d + BatchNorm2d + ReLU.
+        """
+        convolution = Sequential(Conv1d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, group =in_channels), 
+        BatchNorm1d(out_channels), 
+        PReLU(inplace=True))
+        return convolution
 
     def forward(self, x):
 

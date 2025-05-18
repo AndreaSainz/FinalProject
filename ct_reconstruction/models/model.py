@@ -730,7 +730,7 @@ class ModelBase(Module):
             #plot results
             print("\n=== Testing Results ===")
             print(f"Test Loss: {test_results['test_loss']:.6f}")
-            print(f"Test PSNR: {test_results['psnr']:.2f} dB")
+            print(f"Test PSNR: {test_results['psnr']:.2f}")
             print(f"Test SSIM: {test_results['ssim']:.4f}")
 
             # get random samples

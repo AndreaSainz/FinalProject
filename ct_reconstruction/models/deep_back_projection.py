@@ -181,6 +181,7 @@ class DBP(ModelBase):
         Saves model hyperparameters to a JSON config file for later restoration.
         """
         config = {
+            "model_type": self.model_type,
             "model_path": self.model_path,
             "in_channels": self.in_channels,
             "n_single_BP": self.n_single_BP,

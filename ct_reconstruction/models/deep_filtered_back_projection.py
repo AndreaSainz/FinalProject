@@ -64,15 +64,34 @@ class DeepFBP(ModelBase):
 
         return filter_sinogram
 
+    def filter2(self,x):
+        # 1D Fast Fourier Transform
+        ftt1d = torch.fft.fft(x, dim=-1)
+
+        # Shift transformation
+        ftt1d_shiffted = torch.fft.fftshift(ftt1d)
+
+        # filtering values
+        filter_ftt1d_shiffted= ftt1d_shiffted*self.learnable_filter
+
+        # transforming back to sinogram
+        filter_sinogram = torch.fft.ifft(filter_ftt1d_shiffted, dim=-1).real
+
+        return filter_sinogram
+
+
     def forward(self, x):
+
     
         return final_layer
+
 
     def save_config(self):
         """
         Saves model hyperparameters to a JSON config file for later restoration.
         """
         config = {
+            "model_type": self.model_type,
             "model_path": self.model_path,
             "n_single_BP": self.n_single_BP,
             "alpha": self.alpha,

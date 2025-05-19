@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ..datasets.dataset import LoDoPaBDataset
 from ..callbacks.early_stopping import EarlyStopping
 from ..utils.metrics import compute_psnr, compute_ssim
-from ..utils.plotting import show_example, plot_metric, plot_different_reconstructions
+from ..utils.plotting import show_example, plot_metric, plot_different_reconstructions, show_example_epoch
 from ..utils.loggers import configure_logger
 from torch.utils.data import DataLoader
 import time
@@ -55,7 +55,7 @@ class ModelBase(Module):
         scheduler (bool): Enables learning rate scheduling with ReduceLROnPlateau.
     """
 
-    def __init__(self, model_path, model_type, n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, scheduler = True, log_file='training.log'):
+    def __init__(self, model_path, model_type, single_bp , n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, scheduler = True, log_file='training.log'):
         super().__init__()
 
         #Scan parameters from the paper and data
@@ -76,6 +76,7 @@ class ModelBase(Module):
         self.training_path = None
         self.validation_path = None
         self.test_path = None
+        self.single_bp = single_bp
         self.n_single_BP = n_single_BP
         self.alpha = alpha
         self.i_0 = i_0
@@ -161,6 +162,7 @@ class ModelBase(Module):
             self.angles,
             self.pg,
             self.A,
+            self.single_bp,
             self.n_single_BP,
             self.alpha,
             self.i_0,
@@ -175,6 +177,7 @@ class ModelBase(Module):
             self.angles, 
             self.pg, 
             self.A, 
+            self.single_bp,
             self.n_single_BP, 
             self.alpha,  
             self.i_0, 
@@ -237,7 +240,7 @@ class ModelBase(Module):
 
 
 
-    def train_one_epoch(self, train_dataloader, opt, loss, e):
+    def train_one_epoch(self, train_dataloader, opt, loss, e, show_examples, number_of_examples):
         """
         Trains the model for a single epoch.
 
@@ -257,15 +260,24 @@ class ModelBase(Module):
         total_train_loss = 0
 
         # loop over the training set
-        for batch in train_dataloader:
+        for batch_idx, batch in enumerate(train_dataloader):
 
             # send the input to the device
             ground_truth = batch["ground_truth"]
-            single_back_projections = batch["single_back_projections"]
+            if self.single_bp:
+                input_data = batch["single_back_projections"]
+            else:
+                input_data = batch["noisy_sinogram"]
 
             # perform a forward pass and calculate the training loss
-            pred = self.model(single_back_projections)
+            pred = self.model(input_data)
             loss_value = loss(pred, ground_truth)
+
+            if show_examples:
+                if batch_idx == 0:
+                    for i in range(min(number_of_examples, pred.shape[0])):
+                        show_example_epoch(pred[i], ground_truth[i], e, f"models/figures/epochs_{i}")
+                        print(f"[INFO] Saved example figure: models/figures/epochs_{i}_{e}.png")
 
             # checking that predictions and ground truth images have same shape
             assert ground_truth.shape == pred.shape, f"[ERROR] Shape mismatch: predicted {pred.shape}, ground truth {ground_truth.shape}"
@@ -311,10 +323,13 @@ class ModelBase(Module):
 
                 # send the input to the device
                 ground_truth = batch["ground_truth"]
-                single_back_projections = batch["single_back_projections"]
+                if self.single_bp:
+                    input_data = batch["single_back_projections"]
+                else:
+                    input_data = batch["noisy_sinogram"]
             
                 # make the predictions and calculate the validation loss
-                pred = self.model(single_back_projections)
+                pred = self.model(input_data)
                 loss_value = loss(pred, ground_truth).item()
                 total_val_loss += loss_value
 
@@ -334,7 +349,7 @@ class ModelBase(Module):
 
         
 
-    def train(self, training_path, validation_path, max_len_train = None, max_len_val=None, patience=10, confirm_train=False):
+    def train(self, training_path, validation_path, max_len_train = None, max_len_val=None, patience=10, confirm_train=False, show_examples=True, number_of_examples=1):
         """
         Performs full training with early stopping, metric logging, and learning rate scheduling.
 
@@ -365,7 +380,10 @@ class ModelBase(Module):
     
         # show model summary
         self.model.to(self.device)
-        sample = next(iter(train_dataloader))["single_back_projections"]  # single_back_projections
+        if self.single_bp:
+            sample = next(iter(train_dataloader))["single_back_projections"]  # single_back_projections
+        else:
+            sample = next(iter(train_dataloader))["noisy_sinogram"]
         summary(self.model, input_size=tuple(sample.shape[1:]))
 
         # confirmation for the model to be train 
@@ -411,7 +429,7 @@ class ModelBase(Module):
         for e in t:
 
             # call the training function
-            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e)
+            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e, show_examples, number_of_examples)
 
                 
             # call the validation function
@@ -492,6 +510,7 @@ class ModelBase(Module):
         self.angles, 
         self.pg, 
         self.A, 
+        self.single_bp,
         self.n_single_BP, 
         self.alpha,  
         self.i_0, 
@@ -545,11 +564,16 @@ class ModelBase(Module):
             for batch in tqdm(test_dataloader):
                 # send the input to the device
                 ground_truth = batch['ground_truth']
-                single_back_projections = batch['single_back_projections']
                 noisy_sino = batch['noisy_sinogram']
+                if self.single_bp:
+                    input_data = batch["single_back_projections"]
+                else:
+                    input_data = noisy_sino
+
+                
 
                 # make the predictions and calculate the validation loss
-                pred = self.model(single_back_projections)
+                pred = self.model(input_data)
                 loss_val = loss(pred, ground_truth).item()
                 total_test_loss += loss_val
 
@@ -895,3 +919,8 @@ class ModelBase(Module):
 
         self.model.load_state_dict(torch.load(path, map_location=self.device))
         self._log(f"Model weights loaded from {path}")
+        
+        #change training state 
+        self.trained = True
+
+        

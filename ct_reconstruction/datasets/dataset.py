@@ -38,7 +38,7 @@ class LoDoPaBDataset(Dataset):
     """
 
 
-    def __init__(self, ground_truth_dir, vg, angles, pg, A, n_single_BP= 16, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None):
+    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None):
         
         #Scan parameters from the paper and data
         self.pixels = 362               # Image resolution of 362x362 pixels on a domain size of 26x26 cm
@@ -48,6 +48,7 @@ class LoDoPaBDataset(Dataset):
         self.src_det_dist = 1050
         self.slices_per_file = 128
         self.n_single_BP = int(n_single_BP)
+        self.single_bp = single_bp
         self.alpha = alpha
         
 
@@ -188,6 +189,9 @@ class LoDoPaBDataset(Dataset):
         # Final result 
         noisy_sinogram += gaussian_noise
 
+        # no negative 
+        noisy_sinogram = torch.clamp(noisy_sinogram, min=0)
+
         return noisy_sinogram
 
 
@@ -322,9 +326,14 @@ class LoDoPaBDataset(Dataset):
 
                                                                                 
         #Create single-back projections
-        single_back_projections = self._generate_single_backprojections(noisy_sinogram)
+        if self.single_bp:
+            single_back_projections = self._generate_single_backprojections(sinogram)
 
+            return {'ground_truth': sample_slice, 
+            'sinogram': sinogram, 
+            'noisy_sinogram':noisy_sinogram, 
+            'single_back_projections': single_back_projections}
+        
         return {'ground_truth': sample_slice, 
-        'sinogram': sinogram, 
-        'noisy_sinogram':noisy_sinogram, 
-        'single_back_projections': single_back_projections}
+            'sinogram': sinogram, 
+            'noisy_sinogram': noisy_sinogram}

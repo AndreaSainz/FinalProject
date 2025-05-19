@@ -31,6 +31,29 @@ def show_example(output_img, ground_truth):
     plt.tight_layout()
     plt.show()
 
+def show_example_epoch(output_img, ground_truth, epoch, save_path = None):
+    """
+    Displays a side-by-side comparison of the model's reconstruction and the ground truth image.
+
+    Args:
+        output_img (torch.Tensor): Reconstructed image from the model.
+        ground_truth (torch.Tensor): Ground truth image.
+        epoch (int): Epoch index.
+        save_path (str, optional): Base path to save the figure (without extension).
+    """
+
+    # creating one figure with two imagenes
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    axes[0].imshow(output_img.squeeze().cpu(), cmap='gray')
+    axes[0].set_title(f"Reconstructed image in epoch {epoch}")
+    axes[1].imshow(ground_truth.squeeze().cpu(), cmap='gray')
+    axes[1].set_title(f"Ground Truth in epoch {epoch}")
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(f"{save_path}_{epoch}.png")
+    
+    plt.close()
+
 
 def plot_metric(x, y_dict, title, xlabel, ylabel, test_value=None, save_path=None):
     """

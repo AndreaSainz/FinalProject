@@ -39,7 +39,7 @@ class DeepFBP(ModelBase):
     def __init__(self, filter_type, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file):
         
         # Initialize the base training infrastructure
-        super().__init__(model_path, "DeepFBP", n_single_BP, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
+        super().__init__(model_path, "DeepFBP", False, n_single_BP, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
         self.filter_type
 
         # for python to know the parameters are learnable they should be define inside an nn.Module in init
@@ -178,11 +178,7 @@ class DeepFBP(ModelBase):
 
         x = self.interpolator_conv(x)
 
-
-
-
-
-
+        image = self.A_T(x)
 
 
         return final_layer

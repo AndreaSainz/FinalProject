@@ -57,16 +57,14 @@ class DBP(ModelBase):
     """
 
 
-    def __init__(self, in_channels, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file):
+    def __init__(self, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file):
 
         # Initialize the base training infrastructure
-        super().__init__(model_path, "DBP", n_single_BP, alpha, i_0, sigma, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
+        super().__init__(model_path, "DBP", True, n_single_BP, alpha, i_0, sigma, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
         
-        
-        self.in_channels = in_channels
 
         # initial layer
-        self.conv1 = self.initial_layer(in_channels=self.in_channels, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.conv1 = self.initial_layer(in_channels=self.n_single_BP, out_channels=64, kernel_size=3, stride=1, padding=1)
 
         # middel layer (15 equal layers)
         self.middle_blocks = ModuleList([
@@ -183,7 +181,7 @@ class DBP(ModelBase):
         config = {
             "model_type": self.model_type,
             "model_path": self.model_path,
-            "in_channels": self.in_channels,
+            "single_bp": self.single_bp,
             "n_single_BP": self.n_single_BP,
             "alpha": self.alpha,
             "i_0": self.i_0,

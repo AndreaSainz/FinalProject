@@ -52,16 +52,16 @@ class DeepFBP(ModelBase):
             self.learnable_filter = Parameter(stacked_filters)
 
 
-        self.interpolator_1 = self.intermediate_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
-        self.interpolator_2 = self.intermediate_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
-        self.interpolator_3 = self.intermediate_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
-        self.interpolator_conv = Conv1d(self.num_detectors, self.num_detectors, kernel_size=3, stride=1, padding=1)
+        self.interpolator_1 = self.intermediate_residual_block(channels=self.num_angles, kernel_size=3, stride=1, padding=1)
+        self.interpolator_2 = self.intermediate_residual_block(channels=self.num_angles, kernel_size=3, stride=1, padding=1)
+        self.interpolator_3 = self.intermediate_residual_block(channels=self.num_angles, kernel_size=3, stride=1, padding=1)
+        self.interpolator_conv = Conv1d(self.num_angles, self.num_angles, kernel_size=3, stride=1, padding=1)
 
-        self.deoising_conv_1 = Conv2d(in_channels= 1, out_channels= 64, kernel_size=3, stride=1, padding=1)
+        self.denoising_conv_1 = Conv2d(in_channels= 1, out_channels= 64, kernel_size=3, stride=1, padding=1)
         self.denoising_res_1 = self.denoising_residual_block(in_channels=64, kernel_size=3, stride=1, padding=1)
         self.denoising_res_2 = self.denoising_residual_block(in_channels=64, kernel_size=3, stride=1, padding=1)
         self.denoising_res_3 = self.denoising_residual_block(in_channels=64, kernel_size=3, stride=1, padding=1)
-        self.deoising_conv_2 = Conv2d(in_channels= 64, out_channels= 1, kernel_size=3, stride=1, padding=1)
+        self.denoising_conv_2 = Conv2d(in_channels= 64, out_channels= 1, kernel_size=3, stride=1, padding=1)
 
         self.model = self
 
@@ -241,14 +241,14 @@ class DeepFBP(ModelBase):
         image = self.A.T(x)
 
         #denoising part( 1 conv, 3 residuals, 1 conv)
-        image1 = self.deoising_conv_1(image)
+        image1 = self.denoising_conv_1(image)
         image2 = self.denoising_res_1(image1)
         image3 = image1 +image2 
         image4 = self.denoising_res_2(image3)
         image5 = image3 +image4 
         image6 =self.denoising_res_3(image5)
         image7 = image5 +image6
-        image8 = self.deoising_conv_2(image7)
+        image8 = self.denoising_conv_2(image7)
 
         return image8
 

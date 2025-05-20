@@ -1,11 +1,11 @@
 import os
 import json
 from ..models.deep_back_projection import DBP
-#from ..models.deep_filtered_back_projection import DeepFBP
+from ..models.deep_filtered_back_projection import DeepFBP
 
 MODEL_REGISTRY = {
     "DBP": DBP,
-    #"DeepFBP": DeepFBP,
+    "DeepFBP": DeepFBP,
 }
 
 

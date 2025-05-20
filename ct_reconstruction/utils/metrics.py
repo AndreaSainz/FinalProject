@@ -77,5 +77,11 @@ def compute_ssim(reconstructed, ground_truth, data_range):
     Returns:
         float: SSIM value between -1 and 1. A value of 1 indicates perfect similarity.
     """
+    # Ensure input tensors are 4D: [B, C, H, W]
+    if reconstructed.ndim == 3:
+        reconstructed = reconstructed.unsqueeze(1)  # Add channel dimension
+    if ground_truth.ndim == 3:
+        ground_truth = ground_truth.unsqueeze(1)
+        
     # both inputs must be shape [B, C, H, W]
     return ssim(reconstructed, ground_truth, data_range).item()

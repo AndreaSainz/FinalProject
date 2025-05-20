@@ -245,7 +245,7 @@ class ModelBase(Module):
 
 
 
-    def train_one_epoch(self, train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples):
+    def train_one_epoch(self, train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt):
         """
         Trains the model for a single epoch.
 
@@ -278,12 +278,6 @@ class ModelBase(Module):
             pred = self.model(input_data)
             loss_value = loss(pred, ground_truth)
 
-            if show_examples:
-                if batch_idx == 0:
-                    for i in range(min(number_of_examples, pred.shape[0])):
-                        show_example_epoch(pred[i], ground_truth[i], e, f"{save_path}_epochs_{i}")
-                        print(f"[INFO] Saved example figure: {save_path}_epochs_{i}_{e}.png")
-
             # checking that predictions and ground truth images have same shape
             assert ground_truth.shape == pred.shape, f"[ERROR] Shape mismatch: predicted {pred.shape}, ground truth {ground_truth.shape}"
 
@@ -291,6 +285,14 @@ class ModelBase(Module):
             opt.zero_grad()
             self.accelerator.backward(loss_value)
             opt.step()
+
+            # show exmaple
+            if show_examples and fixed_input is not None and fixed_gt is not None:
+                with torch.no_grad():
+                    fixed_pred = self.model(fixed_input)
+                    for i in range(min(number_of_examples, fixed_pred.shape[0])):
+                        show_example_epoch(fixed_pred[i], fixed_gt[i], e, f"{save_path}_epochs_{i}")
+                        print(f"[INFO] Saved example figure: {save_path}_epochs_{i}_{e}.png")
 
             # add the loss to the total training loss so far
             total_train_loss += loss_value.item()
@@ -378,6 +380,7 @@ class ModelBase(Module):
         # fix seed
         self._set_seed()
 
+
     
         # load training and validation datasets
         train_dataloader, val_dataloader = self._get_dataloaders()
@@ -409,6 +412,12 @@ class ModelBase(Module):
         # accelerates training
         self.model, opt, train_dataloader, val_dataloader = self.accelerator.prepare(self.model, self.optimizer, train_dataloader, val_dataloader)
         
+        # fixed one batch if show_example is require
+        if show_examples:
+            fixed_batch = next(iter(train_dataloader))
+            fixed_input = fixed_batch["single_back_projections"] if self.single_bp else fixed_batch["noisy_sinogram"]
+            fixed_gt = fixed_batch["ground_truth"]
+
         # initialize early stopping
         early_stopping = EarlyStopping(patience=patience, debug=self.debug, path=f'{self.model_path}_best.pth',  logger=self.logger)
 
@@ -434,7 +443,7 @@ class ModelBase(Module):
         for e in t:
 
             # call the training function
-            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples)
+            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt)
 
                 
             # call the validation function

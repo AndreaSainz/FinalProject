@@ -154,7 +154,16 @@ class LoDoPaBDataset(Dataset):
                 f"noise=Poisson+Gaussian(σ={self.sigma}), "
                 f"i_0={self.i_0})")
 
+    def minmax_normalize(self, tensor):
 
+        min_val = tensor.min()
+        max_val = tensor.max()
+        norm = (tensor - min_val) / (max_val - min_val)
+        return norm, min_val, max_val
+
+    def minmax_denormalize(self, norm_tensor, min_val, max_val):
+        return norm_tensor * (max_val - min_val) + min_val
+        
     def noise(self, sinogram):
         """
         Adds Poisson and Gaussian noise to a sinogram.
@@ -169,12 +178,14 @@ class LoDoPaBDataset(Dataset):
         Returns:
             torch.Tensor: Noisy sinogram of the same shape.
         """
-        
+        # Nomalised sinogram between [0,1] to add noise
+        norm_sino, min_val, max_val =  self.minmax_normalize(sinogram)
+
         #Initilizing seed for reproducibility porpuses
         torch.manual_seed(self.seed)
 
         # Simulate measured photons using Poisson noise (counting error)
-        measured_photons = torch.poisson(self.i_0 * torch.exp(-sinogram))
+        measured_photons = torch.poisson(self.i_0 * torch.exp(-norm_sino))
 
         # Avoid log(0) by setting the minimum to 1
         measured_photons = torch.clamp(measured_photons, min=1.0)
@@ -188,6 +199,9 @@ class LoDoPaBDataset(Dataset):
 
         # Final result 
         noisy_sinogram += gaussian_noise
+
+        # reaply the normalization
+        noisy_sinogram = self.minmax_denormalize(noisy_sinogram, min_val, max_val)
 
         # no negative 
         noisy_sinogram = torch.clamp(noisy_sinogram, min=0)
@@ -321,13 +335,15 @@ class LoDoPaBDataset(Dataset):
         # Add nose to sinogram
         noisy_sinogram = self.noise(sinogram)
 
-        # Print the shape of the sinogram
-        #self._log("[Sinogram] Sinogram shape:", sinogram.shape)
+
+        # Normalise noisy sinogram for training porpuses
+        noisy_sinogram, _, _ =  self.minmax_normalize(noisy_sinogram)
 
                                                                                 
         #Create single-back projections
         if self.single_bp:
             single_back_projections = self._generate_single_backprojections(sinogram)
+            single_back_projections, _, _ =  self.minmax_normalize(single_back_projections)
 
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 

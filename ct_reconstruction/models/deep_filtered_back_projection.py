@@ -45,14 +45,23 @@ class DeepFBP(ModelBase):
         # initialize the filter as the 
         ram_lak = self.ram_lak_filter()
         # telling pyhton that the filter is learnable 
-        self.learnable_filter = Parameter(ram_lak.clone().detach())
-
+        if self.filter_type == "Filter I":
+            self.learnable_filter = Parameter(ram_lak.clone().detach()) #[Detectors]
+        else:
+            stacked_filters = torch.stack([ram_lak.clone().detach() for _ in range(self.num_angles)])  # [Angles, Detectors]
+            self.learnable_filter = Parameter(stacked_filters)
 
 
         self.interpolator_1 = self.intermediate_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
         self.interpolator_2 = self.intermediate_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
         self.interpolator_3 = self.intermediate_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
         self.interpolator_conv = Conv1d(self.num_detectors, self.num_detectors, kernel_size=3, stride=1, padding=1)
+
+        self.deoising_conv_1 = Conv2d(in_channels= 1, out_channels= 64, kernel_size=3, stride=1, padding=1)
+        self.denoising_res_1 = self.denoising_residual_block(in_channels=64, kernel_size=3, stride=1, padding=1)
+        self.denoising_res_2 = self.denoising_residual_block(in_channels=64, kernel_size=3, stride=1, padding=1)
+        self.denoising_res_3 = self.denoising_residual_block(in_channels=64, kernel_size=3, stride=1, padding=1)
+        self.deoising_conv_2 = Conv2d(in_channels= 64, out_channels= 1, kernel_size=3, stride=1, padding=1)
 
         self.model = self
 
@@ -102,7 +111,7 @@ class DeepFBP(ModelBase):
 
 
         
-    def filter1(self,x):
+    def filter(self,x):
         # 1D Fast Fourier Transform
         ftt1d = torch.fft.fft(x, dim=-1)
 
@@ -110,28 +119,19 @@ class DeepFBP(ModelBase):
         ftt1d_shiffted = torch.fft.fftshift(ftt1d)
 
         # filtering values
-        filter_ftt1d_shiffted= ftt1d_shiffted*self.learnable_filter
+        if self.filter_type == "Filter I":
+            # Apply same filter across all angles
+            filtered = ftt1d_shifted * self.learnable_filter  # broadcast over [B, A, D]
+        else:
+            # Apply angle-specific filter: [A, D] → broadcast over B
+            filtered = ftt1d_shifted * self.learnable_filter.unsqueeze(0)  # [1, A, D]
+        
 
         # transforming back to sinogram
-        filter_sinogram = torch.fft.ifft(filter_ftt1d_shiffted, dim=-1).real
+        filter_sinogram = torch.fft.ifft(filtered, dim=-1).real
 
         return filter_sinogram
 
-
-    def filter2(self,x):
-        # 1D Fast Fourier Transform (one per angle)
-        ftt1d = torch.fft.fft(x, dim=-1)
-
-        # Shift transformation 
-        ftt1d_shiffted = torch.fft.fftshift(ftt1d, dim=-1)
-
-        # filtering values, different for each angle (the unsqueeze create a filter per angle [num_angles, detectors])
-        filter_ftt1d_shiffted= ftt1d_shiffted*self.learnable_filter.unsqueeze(0)
-
-        # transforming back to sinogram
-        filter_sinogram = torch.fft.ifft(filter_ftt1d_shiffted, dim=-1).real
-
-        return filter_sinogram
 
 
     def intermediate_residual_block(self, channels, kernel_size, stride, padding):
@@ -156,11 +156,11 @@ class DeepFBP(ModelBase):
         return convolution
 
 
-    def denoising_residual_block(self, in_channels, mid_channels, out_channels, kernel_size, stride, padding):
+    def denoising_residual_block(self, in_channels, kernel_size, stride, padding):
         convolution = Sequential(
-            Conv2d(in_channels, mid_channels, kernel_size=kernel_size, stride=stride, padding=padding),
+            Conv2d(in_channels, in_channels, kernel_size=kernel_size, stride=stride, padding=padding),
             ReLU(inplace=True),
-            Conv2d(mid_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+            Conv2d(in_channels, in_channels, kernel_size=kernel_size, stride=stride, padding=padding)
         )
         return convolution
 
@@ -227,25 +227,30 @@ class DeepFBP(ModelBase):
 
     def forward(self, x):
         # initial part, filter
-        if self.filter_type == "Filter I":
-            x = self.filter1(x)
-        else:
-            x = self.filter2(x)
+        x = self.filter(x)
         
-        #interpolator part
+        #Neural network for interpolator part
         res1 = self.interpolator_1(x)
         x += res1
         res2 = self.interpolator_2(x)
         x += res2
         res3 = self.interpolator_3(x)
         x += res3
-
         x = self.interpolator_conv(x)
-
+        #interpolating (creating image)
         image = self.A.T(x)
 
+        #denoising part( 1 conv, 3 residuals, 1 conv)
+        image1 = self.deoising_conv_1(image)
+        image2 = self.denoising_res_1(image1)
+        image3 = image1 +image2 
+        image4 = self.denoising_res_2(image3)
+        image5 = image3 +image4 
+        image6 =self.denoising_res_3(image5)
+        image7 = image5 +image6
+        image8 = self.deoising_conv_2(image7)
 
-        return image
+        return image8
 
 
     def print_filter(self, save_path=None, angles=None):

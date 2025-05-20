@@ -7,7 +7,7 @@ from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ..datasets.dataset import LoDoPaBDataset
 from ..callbacks.early_stopping import EarlyStopping
-from ..utils.metrics import compute_psnr, compute_ssim
+from ..utils.metrics import compute_psnr, compute_ssim, compute_psnr_results
 from ..utils.plotting import show_example, plot_metric, plot_different_reconstructions, show_example_epoch
 from ..utils.loggers import configure_logger
 from torch.utils.data import DataLoader
@@ -22,6 +22,7 @@ import logging
 from accelerate import Accelerator
 import os
 import gc
+import pandas as pd
 
 
 class ModelBase(Module):
@@ -102,6 +103,7 @@ class ModelBase(Module):
 
         # accelerator for faster code
         self.accelerator = Accelerator()
+        self.trainable_params = None
 
         # logger configuration
         self.logger = configure_logger("ct_reconstruction.models.model", log_file, debug=self.debug)
@@ -222,13 +224,15 @@ class ModelBase(Module):
         Raises:
             ValueError: If the optimizer or loss type is unsupported.
         """
+        # get trainable parameters
+        trainable_params = filter(lambda p: p.requires_grad, self.model.parameters())
 
         #optimiser
         if self.optimizer_type == "Adam":
-            self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
+            self.optimizer = Adam(trainable_params, lr=self.learning_rate)
 
         elif self.optimizer_type == "AdamW":
-            self.optimizer = AdamW(self.model.parameters(), lr=self.learning_rate)
+            self.optimizer = AdamW(trainable_params, lr=self.learning_rate)
         else:
             raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
 
@@ -240,7 +244,7 @@ class ModelBase(Module):
 
 
 
-    def train_one_epoch(self, train_dataloader, opt, loss, e, show_examples, number_of_examples):
+    def train_one_epoch(self, train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples):
         """
         Trains the model for a single epoch.
 
@@ -276,8 +280,8 @@ class ModelBase(Module):
             if show_examples:
                 if batch_idx == 0:
                     for i in range(min(number_of_examples, pred.shape[0])):
-                        show_example_epoch(pred[i], ground_truth[i], e, f"models/figures/epochs_{i}")
-                        print(f"[INFO] Saved example figure: models/figures/epochs_{i}_{e}.png")
+                        show_example_epoch(pred[i], ground_truth[i], e, f"{save_path}_epochs_{i}")
+                        print(f"[INFO] Saved example figure: {save_path}_epochs_{i}_{e}.png")
 
             # checking that predictions and ground truth images have same shape
             assert ground_truth.shape == pred.shape, f"[ERROR] Shape mismatch: predicted {pred.shape}, ground truth {ground_truth.shape}"
@@ -349,7 +353,7 @@ class ModelBase(Module):
 
         
 
-    def train(self, training_path, validation_path, max_len_train = None, max_len_val=None, patience=10, confirm_train=False, show_examples=True, number_of_examples=1):
+    def train(self, training_path, validation_path, save_path, max_len_train = None, max_len_val=None, patience=10, confirm_train=False, show_examples=True, number_of_examples=1):
         """
         Performs full training with early stopping, metric logging, and learning rate scheduling.
 
@@ -429,7 +433,7 @@ class ModelBase(Module):
         for e in t:
 
             # call the training function
-            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e, show_examples, number_of_examples)
+            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples)
 
                 
             # call the validation function
@@ -503,7 +507,7 @@ class ModelBase(Module):
         """
 
         # Load test dataset
-        is_gcs = self.training_path.startswith("gs://")
+        is_gcs = self.test_path.startswith("gs://")
 
         test_data = LoDoPaBDataset(self.test_path, 
         self.vg, 
@@ -844,7 +848,7 @@ class ModelBase(Module):
         #Nesterov Accelerated Gradient for Least Squares reconstruction 
         rec_nag_ls = nag_ls(self.A, sinogram, num_iterations_nag_ls)
 
-        return { "fbp": rec_fbp,
+        return {"fbp": rec_fbp,
             "sirt": rec_sirt,
             "em": rec_em,
             "tv_min": rec_tv_min,
@@ -852,7 +856,8 @@ class ModelBase(Module):
 
 
 
-    def report_results(self, save_path, samples, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
+
+    def report_results_images(self, save_path, samples, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
         """
         Generates and saves visual comparisons between model predictions, ground truth, 
         and multiple classical CT reconstruction methods.
@@ -869,10 +874,12 @@ class ModelBase(Module):
         Raises:
             RuntimeError: If required .pt files (predictions, sinograms, etc.) are missing.
         """
-        # handling file path error
+        
         if not self.trained:
             self._log(f"This model is not trained yet.",  level='warning')
             return
+
+        # handling file path error
         if not os.path.exists(f"{self.model_path}_predictions_images.pt"):
             self._log("Prediction .pt files not found", level="error")
             return
@@ -893,6 +900,68 @@ class ModelBase(Module):
             reconstructions_dict = self.other_ct_reconstruction(sinograms[sample], num_iterations_sirt, num_iterations_em, num_iterations_tv_min, num_iterations_nag_ls, lamda)
             plot_different_reconstructions(self.model_type, sample, reconstructions_dict, predictions[sample], ground_truths[sample], save_path)
 
+
+
+    def report_results_table(self, save_path, num_iterations_sirt=100, num_iterations_em=100,
+                         num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001):
+        if not self.trained:
+            self._log(f"This model is not trained yet.", level='warning')
+            return
+
+        # File existence checks
+        if not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
+            self._log("Ground truth .pt files not found", level="error")
+            return
+        if not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
+            self._log("Noisy sinograms .pt files not found", level="error")
+            return
+
+        # Load data
+        ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
+        sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
+
+        metrics = {
+            "Algorithm": ["FBP", "SIRT", "EM", "TV-Min", "NAG-LS"],
+            "PSNR": [0] * 5,
+            "SSIM": [0] * 5
+        }
+
+        n_samples = len(sinograms)
+
+        for i in range(n_samples):
+            gt_image = ground_truths[i]
+            recon_dict = self.other_ct_reconstruction(
+                sinograms[i],
+                num_iterations_sirt=num_iterations_sirt,
+                num_iterations_em=num_iterations_em,
+                num_iterations_tv_min=num_iterations_tv_min,
+                num_iterations_nag_ls=num_iterations_nag_ls,
+                lamda=lamda
+            )
+
+            metrics["PSNR"][0] += compute_psnr_results(recon_dict["fbp"], gt_image, self.alpha)
+            metrics["PSNR"][1] += compute_psnr_results(recon_dict["sirt"], gt_image, self.alpha)
+            metrics["PSNR"][2] += compute_psnr_results(recon_dict["em"], gt_image, self.alpha)
+            metrics["PSNR"][3] += compute_psnr_results(recon_dict["tv_min"], gt_image, self.alpha)
+            metrics["PSNR"][4] += compute_psnr_results(recon_dict["nag_ls"], gt_image, self.alpha)
+
+            metrics["SSIM"][0] += compute_ssim(recon_dict["fbp"], gt_image, self.alpha)
+            metrics["SSIM"][1] += compute_ssim(recon_dict["sirt"], gt_image, self.alpha)
+            metrics["SSIM"][2] += compute_ssim(recon_dict["em"], gt_image, self.alpha)
+            metrics["SSIM"][3] += compute_ssim(recon_dict["tv_min"], gt_image, self.alpha)
+            metrics["SSIM"][4] += compute_ssim(recon_dict["nag_ls"], gt_image, self.alpha)
+
+        # Average metrics
+        metrics["PSNR"] = [val / n_samples for val in metrics["PSNR"]]
+        metrics["SSIM"] = [val / n_samples for val in metrics["SSIM"]]
+
+        # Create DataFrame
+        df = pd.DataFrame(metrics)
+
+        # Save as CSV
+        df.to_csv(f"{save_path}_reconstruction_metrics.csv", index=False)
+
+        self._log(f"Results table saved to {save_path}_reconstruction_metrics.csv", level="info")
 
 
 
@@ -918,9 +987,8 @@ class ModelBase(Module):
             raise FileNotFoundError(f"Model file not found: {path}")
 
         self.model.load_state_dict(torch.load(path, map_location=self.device))
+        self.model.to(self.device)
         self._log(f"Model weights loaded from {path}")
-        
+
         #change training state 
         self.trained = True
-
-        

@@ -1,8 +1,8 @@
 import torch
 from torch.nn import Module
 from torch.nn import ModuleList
-from torch.nn import Conv1d
-from torch.nn import PReLU
+from torch.nn import Conv1d, Conv2d
+from torch.nn import PReLU, ReLU
 from torch.nn import BatchNorm1d
 from torch.nn import Sequential
 from torch.nn import MSELoss
@@ -20,7 +20,6 @@ import numpy as np
 from torchsummary import summary
 from ..models.model import ModelBase
 import os
-
 
 class DeepFBP(ModelBase):
     """
@@ -40,19 +39,22 @@ class DeepFBP(ModelBase):
         
         # Initialize the base training infrastructure
         super().__init__(model_path, "DeepFBP", False, n_single_BP, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
-        self.filter_type
+        self.filter_type = filter_type
 
         # for python to know the parameters are learnable they should be define inside an nn.Module in init
         # initialize the filter as the 
-        ram_lak = ram_lak_filter()
+        ram_lak = self.ram_lak_filter()
         # telling pyhton that the filter is learnable 
         self.learnable_filter = Parameter(ram_lak.clone().detach())
 
-        self.interpolator_1 = int_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
-        self.interpolator_2 = int_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
-        self.interpolator_3 = int_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
+
+
+        self.interpolator_1 = self.intermediate_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
+        self.interpolator_2 = self.intermediate_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
+        self.interpolator_3 = self.intermediate_residual_block(channels=self.num_detectors, kernel_size=3, stride=1, padding=1)
         self.interpolator_conv = Conv1d(self.num_detectors, self.num_detectors, kernel_size=3, stride=1, padding=1)
-        self.model = 
+
+        self.model = self
 
 
     def ram_lak_filter(self):
@@ -92,6 +94,7 @@ class DeepFBP(ModelBase):
             if i%2 != 0 and  i!=0:
                 vector[center + i] = -1 / (torch.pi ** 2 * i ** 2)   
         
+        # the ram-lak filter should be in the frequency domain
         frecuency_filter = torch.fft.fft(vector)
         frecuency_filter =  torch.fft.fftshift(frecuency_filter)
 
@@ -131,7 +134,7 @@ class DeepFBP(ModelBase):
         return filter_sinogram
 
 
-    def int_residual_block(self, channels, kernel_size, stride, padding):
+    def intermediate_residual_block(self, channels, kernel_size, stride, padding):
         """
         Constructs a middle convolutional block used in the DBP network.
 
@@ -153,20 +156,81 @@ class DeepFBP(ModelBase):
         return convolution
 
 
-    def linear_interpolation(self, z):
+    def denoising_residual_block(self, in_channels, mid_channels, out_channels, kernel_size, stride, padding):
+        convolution = Sequential(
+            Conv2d(in_channels, mid_channels, kernel_size=kernel_size, stride=stride, padding=padding),
+            ReLU(inplace=True),
+            Conv2d(mid_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+        )
+        return convolution
 
-        image = torch.zeros((self.batch_size, self.pixels,self.pixels))
 
-        pxi,yi,θ = (1 − z) p′ (a) + zp′ (a + 1)
+    def set_training_phase(self, phase):
+        """
+        Configura qué partes del modelo son entrenables según la fase.
+
+        Fase 1: Solo filtro.
+        Fase 2: Filtro + interpoladores.
+        Fase 3: Todos los módulos.
+        """
+        for param in self.parameters():
+            param.requires_grad = False
+
+        if phase == 1:
+            self._log("[TrainPhase] Activating only the learnable filter")
+            self.learnable_filter.requires_grad = True
+
+        elif phase == 2:
+            self._log("[TrainPhase] Activating learnable filter and interpolators")
+            self.learnable_filter.requires_grad = True
+            for interpolator in [self.interpolator_1,
+                                self.interpolator_2,
+                                self.interpolator_3,
+                                self.interpolator_conv]:
+                for param in interpolator.parameters():
+                    param.requires_grad = True
+
+        elif phase == 3:
+            self._log("[TrainPhase] Activating all model parameters")
+            for param in self.parameters():
+                param.requires_grad = True
+        else:
+            raise ValueError("Fase de entrenamiento no válida. Usa 1, 2 o 3.")
 
 
+    def train_deepFBP(self, training_path, validation_path, save_path, max_len_train=None, max_len_val=None,
+          patience=10, confirm_train=False, show_examples=True, number_of_examples=1, phase=1):
+
+          """
+        Performs full training with early stopping, metric logging, and learning rate scheduling.
+
+        Args:
+            training_path (str): Path to the training dataset.
+            validation_path (str): Path to the validation dataset.
+            max_len_train (int, optional): Maximum number of training samples.
+            max_len_val (int, optional): Maximum number of validation samples.
+            patience (int): Number of epochs to wait for improvement before early stopping.
+            confirm_train (bool): Ask for user confirmation before starting training.
+
+        Returns:
+            dict: Training history with average loss, PSNR, and SSIM per epoch.
+        """
+        # set the phase we are in
+        self.set_training_phase(phase)
+
+        #changing paths parameters
+        history = self.train(training_path, validation_path, save_path, max_len_train, max_len_val,
+          patience, confirm_train, show_examples, number_of_examples)
+
+        return history
+       
 
     def forward(self, x):
         # initial part, filter
         if self.filter_type == "Filter I":
-            x = filter1(self,x)
+            x = self.filter1(x)
         else:
-            x = filter2(self,x)
+            x = self.filter2(x)
         
         #interpolator part
         res1 = self.interpolator_1(x)
@@ -178,11 +242,84 @@ class DeepFBP(ModelBase):
 
         x = self.interpolator_conv(x)
 
-        image = self.A_T(x)
+        image = self.A.T(x)
 
 
-        return final_layer
+        return image
 
+
+    def print_filter(self, save_path=None, angles=None):
+        """
+        Visualiza el/los filtro(s) aprendidos en el dominio de la frecuencia.
+
+        Args:
+            save_path (str or None): Ruta para guardar la figura. Si es None, solo muestra en pantalla.
+            angles (list or None): Lista de índices de ángulos a mostrar (solo para Filter II).
+        """
+        # Convertir a numpy y normalizar para mejor visualización
+        if self.filter_type == "Filter I":
+            filt = self.learnable_filter.detach().cpu().numpy()
+            filt = np.abs(np.fft.fftshift(filt))
+            filt /= filt.max()
+
+            plt.figure(figsize=(5, 4))
+            plt.plot(filt, color="tab:blue")
+            plt.title("Learned Filter I")
+            plt.xlabel("frequency")
+            plt.ylabel("amplitude")
+            plt.grid(True)
+            plt.tight_layout()
+
+            if save_path:
+                plt.savefig(save_path)
+            else:
+                plt.show()
+            plt.close()
+
+        elif self.filter_type == "Filter II":
+            if angles is None:
+                raise ValueError("You must provide a list of angles for Filter II.")
+
+            filt_all = self.learnable_filter.detach().cpu().numpy()  # Shape: (num_angles, num_detectors)
+            filt_all = np.abs(np.fft.fftshift(filt_all, axes=1))
+            filt_all = filt_all / np.max(filt_all)
+
+            mean_filter = np.mean(filt_all, axis=0)
+
+            num_angles = len(angles)
+            cols = min(4, num_angles + 1)  # limit to 4 columns max
+            rows = (num_angles + 1 + cols - 1) // cols
+
+            fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3))
+            axes = np.atleast_1d(axes).flatten()
+
+            # Plot mean filter
+            axes[0].plot(mean_filter, color="orange")
+            axes[0].set_title("Mean of Filter II")
+            axes[0].set_xlabel("frequency")
+            axes[0].set_ylabel("amplitude")
+            axes[0].grid(True)
+
+            # Plot selected angles
+            for i, idx in enumerate(angles):
+                if i + 1 >= len(axes):
+                    break
+                axes[i + 1].plot(filt_all[idx], color="orange")
+                axes[i + 1].set_title(f"Filter II at {idx}°")
+                axes[i + 1].set_xlabel("frequency")
+                axes[i + 1].set_ylabel("amplitude")
+                axes[i + 1].grid(True)
+
+            plt.tight_layout()
+
+            if save_path:
+                plt.savefig(save_path)
+            else:
+                plt.show()
+            plt.close()
+
+        else:
+            raise ValueError(f"Unknown filter_type: {self.filter_type}")
 
     def save_config(self):
         """

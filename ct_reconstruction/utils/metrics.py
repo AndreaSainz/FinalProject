@@ -18,6 +18,7 @@ Dependencies:
 from pytorch_msssim import ssim
 import math
 import torch
+from torch.nn import MSELoss
 
 
 def compute_psnr(mse, max_val=1.0):
@@ -47,6 +48,19 @@ def compute_psnr(mse, max_val=1.0):
 
     return psnr
 
+
+def compute_psnr_results(pred, target, max_val=1.0):
+
+    mse_fn = MSELoss()
+    
+    mse = mse_fn(pred, target).item()
+
+    if mse == 0:
+        return float('inf')
+
+    psnr = 10 * math.log10(max_val ** 2 / mse)
+
+    return psnr
 
 
 def compute_ssim(reconstructed, ground_truth, data_range):

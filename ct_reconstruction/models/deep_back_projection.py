@@ -181,7 +181,6 @@ class DBP(ModelBase):
         config = {
             "model_type": self.model_type,
             "model_path": self.model_path,
-            "single_bp": self.single_bp,
             "n_single_BP": self.n_single_BP,
             "alpha": self.alpha,
             "i_0": self.i_0,

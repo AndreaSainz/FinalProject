@@ -1,8 +1,7 @@
 import tomosipo as ts
 from ts_algorithms import fbp, fdk, sirt, em, tv_min2d, nag_ls
 import torch
-from torch.nn import Module
-from torch.nn import MSELoss
+from torch.nn import MSELoss, L1Loss, Module
 from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ..datasets.dataset import LoDoPaBDataset
@@ -239,6 +238,8 @@ class ModelBase(Module):
         # Loss function
         if self.loss_type == "MSELoss":
             self.loss_fn = MSELoss()
+        elif self.loss_type == "L1Loss":
+            self.loss_fn = L1Loss()
         else:
             raise ValueError(f"Unsupported loss type: {self.loss_type}")
 

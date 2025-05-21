@@ -34,11 +34,10 @@ class DeepFBP(ModelBase):
         - CNN post-processing for denoising.
     """
 
-
-    def __init__(self, filter_type, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file):
+    def __init__(self, model_path, filter_type, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file):
         
         # Initialize the base training infrastructure
-        super().__init__(model_path, "DeepFBP", False, n_single_BP, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
+        super().__init__(model_path, "DeepFBP", False, 1, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
         self.filter_type = filter_type
 
         # for python to know the parameters are learnable they should be define inside an nn.Module in init
@@ -63,7 +62,7 @@ class DeepFBP(ModelBase):
         self.denoising_res_3 = self.denoising_residual_block(in_channels=64, kernel_size=3, stride=1, padding=1)
         self.denoising_conv_2 = Conv2d(in_channels= 64, out_channels= 1, kernel_size=3, stride=1, padding=1)
 
-        self.model = self
+        
 
 
     def ram_lak_filter(self):
@@ -150,9 +149,9 @@ class DeepFBP(ModelBase):
         Returns:
             nn.Sequential: Sequential block with Conv2d + BatchNorm2d + ReLU.
         """
-        convolution = Sequential(Conv1d(channels, channels, kernel_size=kernel_size, stride=stride, padding=padding, group =channels), 
+        convolution = Sequential(Conv1d(channels, channels, kernel_size=kernel_size, stride=stride, padding=padding, groups =channels), 
         BatchNorm1d(channels), 
-        PReLU(inplace=True))
+        PReLU())
         return convolution
 
 
@@ -198,10 +197,10 @@ class DeepFBP(ModelBase):
             raise ValueError("Fase de entrenamiento no válida. Usa 1, 2 o 3.")
 
 
-    def train_deepFBP(self, training_path, validation_path, save_path, max_len_train=None, max_len_val=None,
+    def train_deepFBP(self, model, training_path, validation_path, save_path, max_len_train=None, max_len_val=None,
           patience=10, confirm_train=False, show_examples=True, number_of_examples=1, phase=1):
 
-          """
+        """
         Performs full training with early stopping, metric logging, and learning rate scheduling.
 
         Args:
@@ -216,11 +215,12 @@ class DeepFBP(ModelBase):
             dict: Training history with average loss, PSNR, and SSIM per epoch.
         """
         # set the phase we are in
+        self.model = model
         self.set_training_phase(phase)
 
         #changing paths parameters
         history = self.train(training_path, validation_path, save_path, max_len_train, max_len_val,
-          patience, confirm_train, show_examples, number_of_examples)
+            patience, confirm_train, show_examples, number_of_examples)
 
         return history
        

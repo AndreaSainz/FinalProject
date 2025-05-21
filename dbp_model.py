@@ -16,9 +16,9 @@ test_path = '/rds/user/as3628/hpc-work/final_project_dis/data/ground_truth_test'
 
 # define parameters
 n_single_BP = 16
-alpha = 0.05
+alpha = 1
 i_0 = 100000
-sigma = 0.1
+sigma = 0.001
 max_len_train = 320
 max_len_val = 160
 max_len_test = 160
@@ -33,8 +33,9 @@ model_path = "/rds/user/as3628/hpc-work/final_project_dis/models/dbp_first_model
 log_file = "/rds/user/as3628/hpc-work/final_project_dis/models/logs/dbp_first_model_training.log"
 figure_path = "/rds/user/as3628/hpc-work/final_project_dis/models/figures/dbp_first_model"
 
+
 # define model arquitecture
-model_dbp = DBP(in_channels, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file)
+model_dbp = DBP(model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file)
 
 # training and validation
 history = model_dbp.train(training_path, validation_path, max_len_train, max_len_val, patience)
@@ -49,6 +50,8 @@ results = model_dbp.test(test_path, max_len_test)
 model_dbp.results("both", 1, figure_path)
 amples = model_dbp.results("testing", 15, figure_path)
 model_dbp.report_results_images(figure_path, samples)
+model_dbp.report_results_table(figure_path, num_iterations_sirt=200, num_iterations_em=200,
+                         num_iterations_tv_min=200, num_iterations_nag_ls=200, lamda=0.0001)
 
 
 

@@ -21,19 +21,19 @@ n_single_BP = 16
 alpha = 1
 i_0 = 100000
 sigma = 0.001
-max_len_train = 320
-max_len_val = 160
-max_len_test = 160
+max_len_train = 64
+max_len_val = 16
+max_len_test = 16
 seed = 29072000
 debug = True
 batch_size = 32
-epochs = 128
+epochs = 10
 learning_rate = 1e-5
 scheduler = True
 patience = 20
-model_path = "/rds/user/as3628/hpc-work/final_project_dis/models/dbp_first_model"
-log_file = "/rds/user/as3628/hpc-work/final_project_dis/models/logs/dbp_first_model_training.log"
-figure_path = "/rds/user/as3628/hpc-work/final_project_dis/models/figures/dbp_first_model"
+model_path = "/rds/user/as3628/hpc-work/final_project_dis/models/dbp_first_model_short"
+log_file = "/rds/user/as3628/hpc-work/final_project_dis/models/logs/dbp_first_model_short_training.log"
+figure_path = "/rds/user/as3628/hpc-work/final_project_dis/models/figures/dbp_first_model_short"
 
 
 # define model arquitecture

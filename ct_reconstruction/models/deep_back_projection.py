@@ -18,6 +18,7 @@ import random
 import numpy as np
 from torchsummary import summary
 from ..models.model import ModelBase
+from accelerate import Accelerator
 
 
 
@@ -57,10 +58,10 @@ class DBP(ModelBase):
     """
 
 
-    def __init__(self, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, scheduler, log_file):
+    def __init__(self, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file):
 
         # Initialize the base training infrastructure
-        super().__init__(model_path, "DBP", True, n_single_BP, alpha, i_0, sigma, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, scheduler, log_file)
+        super().__init__(model_path, "DBP", True, n_single_BP, alpha, i_0, sigma, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, accelerator, scheduler, log_file)
         
 
         # initial layer
@@ -181,6 +182,7 @@ class DBP(ModelBase):
         config = {
             "model_type": self.model_type,
             "model_path": self.model_path,
+            "accelerator" : self.accelerator,
             "n_single_BP": self.n_single_BP,
             "alpha": self.alpha,
             "i_0": self.i_0,

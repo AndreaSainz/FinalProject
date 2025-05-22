@@ -55,7 +55,7 @@ class ModelBase(Module):
         scheduler (bool): Enables learning rate scheduling with ReduceLROnPlateau.
     """
 
-    def __init__(self, model_path, model_type, single_bp , n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, scheduler = True, log_file='training.log'):
+    def __init__(self, model_path, model_type, single_bp , n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, accelerator,  scheduler = True, log_file='training.log'):
         super().__init__()
 
         #Scan parameters from the paper and data
@@ -101,7 +101,7 @@ class ModelBase(Module):
         self.scheduler = scheduler
 
         # accelerator for faster code
-        self.accelerator = Accelerator()
+        self.accelerator = accelerator
         self.trainable_params = None
 
         # logger configuration
@@ -223,13 +223,19 @@ class ModelBase(Module):
         Raises:
             ValueError: If the optimizer or loss type is unsupported.
         """
-        # get trainable parameters
-        trainable_params = filter(lambda p: p.requires_grad, self.model.parameters())
+        #if self.current_phase is not None:
+            #self.set_training_phase(self.current_phase)
+        
+        # Obtener solo los parámetros que tienen requires_grad=True
+        trainable_params = [p for p in self.model.parameters() if p.requires_grad]
+        
+        # Verificar que tenemos parámetros entrenables
+        if not trainable_params:
+            raise RuntimeError(f"No hay parámetros entrenables en la fase {self.current_phase}")
 
-        #optimiser
+        # Optimizador
         if self.optimizer_type == "Adam":
             self.optimizer = Adam(trainable_params, lr=self.learning_rate)
-
         elif self.optimizer_type == "AdamW":
             self.optimizer = AdamW(trainable_params, lr=self.learning_rate)
         else:
@@ -245,7 +251,7 @@ class ModelBase(Module):
 
 
 
-    def train_one_epoch(self, train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt):
+    def train_one_epoch(self, train_dataloader, opt, loss, e):
         """
         Trains the model for a single epoch.
 
@@ -286,13 +292,6 @@ class ModelBase(Module):
             self.accelerator.backward(loss_value)
             opt.step()
 
-            # show exmaple
-            if show_examples and fixed_input is not None and fixed_gt is not None:
-                with torch.no_grad():
-                    fixed_pred = self.model(fixed_input)
-                    for i in range(min(number_of_examples, fixed_pred.shape[0])):
-                        show_example_epoch(fixed_pred[i], fixed_gt[i], e, f"{save_path}_epochs_{i}")
-                        print(f"[INFO] Saved example figure: {save_path}_epochs_{i}_{e}.png")
 
             # add the loss to the total training loss so far
             total_train_loss += loss_value.item()
@@ -300,7 +299,7 @@ class ModelBase(Module):
         return total_train_loss
 
 
-    def validation(self, val_dataloader, loss, mse_fn, e):
+    def validation(self, val_dataloader, loss, mse_fn, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt):
         """
         Evaluates the model on the validation dataset.
 
@@ -319,6 +318,13 @@ class ModelBase(Module):
 
             # set the model in evaluation mode
             self.model.eval()
+
+            # show exmaple
+            if show_examples and fixed_input is not None and fixed_gt is not None:
+                fixed_pred = self.model(fixed_input)
+                for i in range(min(number_of_examples, fixed_pred.shape[0])):
+                    show_example_epoch(fixed_pred[i], fixed_gt[i], e, f"{save_path}_epochs_{i}")
+                    print(f"[INFO] Saved example figure: {save_path}_epochs_{i}_{e}.png")
 
             # initialize validation metrics
             total_val_loss = 0
@@ -443,11 +449,11 @@ class ModelBase(Module):
         for e in t:
 
             # call the training function
-            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt)
+            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e)
 
                 
             # call the validation function
-            total_val_loss, total_psnr, total_ssim = self.validation(val_dataloader, loss, mse_fn, e)
+            total_val_loss, total_psnr, total_ssim = self.validation(val_dataloader, loss, mse_fn, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt)
 
             
             # update our training history

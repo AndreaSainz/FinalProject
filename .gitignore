@@ -72,6 +72,6 @@ data/
 *.out
 *.wilkes3
 *.wilkes2
-test.sh
-
+dbp.sh
+deepfbp.sh
 Bibliografía.xlsx

@@ -11,30 +11,29 @@ from accelerate import Accelerator
 accelerator = Accelerator()
 
 # training, validation and testing paths
-training_path = '/rds/user/as3628/hpc-work/final_project_dis/data/ground_truth_train'
-validation_path = '/rds/user/as3628/hpc-work/final_project_dis/data/ground_truth_validation'
-test_path = '/rds/user/as3628/hpc-work/final_project_dis/data/ground_truth_test'
-
+training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_train'
+validation_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_validation'
+test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_test'
 
 # define parameters
 n_single_BP = 16
 alpha = 1
 i_0 = 100000
 sigma = 0.001
-max_len_train = 10
-max_len_val = 5
-max_len_test = 5
+max_len_train = 1200
+max_len_val = 480
+max_len_test = 480
 seed = 29072000
 debug = True
-batch_size = 5
-epochs = 1
-learning_rate = 1e-5
+batch_size = 12
+epochs = 50
+learning_rate = 1e-3
 scheduler = True
 filter_type = "Filter I"
 patience = 20
-model_path = "/rds/user/as3628/hpc-work/final_project_dis/models/dbp_first_model_short"
-log_file = "/rds/user/as3628/hpc-work/final_project_dis/models/logs/dbp_first_model_short_training.log"
-figure_path = "/rds/user/as3628/hpc-work/final_project_dis/models/figures/dbp_first_model_short"
+model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/deepfbp_1200_50epoch"
+log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/deepfbp_1200_50epoch_training.log"
+figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_1200_50epoch"
 
 
 # define model arquitecture

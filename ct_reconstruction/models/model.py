@@ -272,7 +272,7 @@ class ModelBase(Module):
         total_train_loss = 0
 
         # loop over the training set
-        for batch in train_dataloader:
+        for batch_id, batch in enumerate(train_dataloader):
 
             # send the input to the device
             ground_truth = batch["ground_truth"]
@@ -297,6 +297,19 @@ class ModelBase(Module):
 
             # add the loss to the total training loss so far
             total_train_loss += loss_value.item()
+
+            #Clean memory
+            del input_data, ground_truth, pred, loss_value
+            if batch_id % 10 == 0:
+                gc.collect()
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+
+                elif torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+
 
         if show_examples and fixed_input is not None and fixed_gt is not None and e % 5 == 0:
             with torch.no_grad():  # Asegura que no guarda gradientes
@@ -334,7 +347,7 @@ class ModelBase(Module):
             total_ssim = 0
 
             # loop over the validation set
-            for batch in tqdm(val_dataloader, desc=f"Validation Epoch {e+1}", leave=False):
+            for batch_id, batch in enumerate(tqdm(val_dataloader, desc=f"Validation Epoch {e+1}", leave=False)):
 
                 # send the input to the device
                 ground_truth = batch["ground_truth"]
@@ -359,6 +372,17 @@ class ModelBase(Module):
 
                 total_psnr += compute_psnr(mse_val, self.alpha)
                 total_ssim += compute_ssim(pred, ground_truth, self.alpha)
+
+                 #Clean memory
+                if batch_id == 10:
+                    gc.collect()
+
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.ipc_collect()
+
+                    elif torch.backends.mps.is_available():
+                        torch.mps.empty_cache()
         
         return total_val_loss, total_psnr, total_ssim
 
@@ -520,9 +544,6 @@ class ModelBase(Module):
             DataLoader: Dataloader for the test dataset.
         """
 
-        # Load test dataset
-        is_gcs = self.test_path.startswith("gs://")
-
         test_data = LoDoPaBDataset(self.test_path, 
         self.vg, 
         self.angles, 
@@ -579,7 +600,7 @@ class ModelBase(Module):
             total_ssim = 0
 
             # loop over the validation set
-            for batch in tqdm(test_dataloader):
+            for batch_id, batch in enumerate(tqdm(test_dataloader)):
                 # send the input to the device
                 ground_truth = batch['ground_truth']
                 noisy_sino = batch['noisy_sinogram']
@@ -613,14 +634,15 @@ class ModelBase(Module):
                 noisy_sinograms.append(noisy_sino.cpu())
 
                 #Clean memory
-                gc.collect()
+                if batch_id == 10:
+                    gc.collect()
 
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    torch.cuda.ipc_collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.ipc_collect()
 
-                elif torch.backends.mps.is_available():
-                    torch.mps.empty_cache()
+                    elif torch.backends.mps.is_available():
+                        torch.mps.empty_cache()
 
         return predictions, gt_images, noisy_sinograms, total_test_loss, total_psnr, total_ssim
 
@@ -660,7 +682,7 @@ class ModelBase(Module):
 
         # initialize  optimizer and loss function
         self.setup_optimizer_and_loss()
-        model, loss, test_dataloader = self.accelerator.prepare(self.model, self.loss_fn, test_dataloader)
+        self.model, loss, test_dataloader = self.accelerator.prepare(self.model, self.loss_fn, test_dataloader)
 
         # call evaliation function
         predictions, gt_images, noisy_sinograms, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)

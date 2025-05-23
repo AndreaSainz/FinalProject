@@ -2,6 +2,7 @@ import os
 import json
 from ..models.deep_back_projection import DBP
 from ..models.deep_filtered_back_projection import DeepFBP
+from accelerate import Accelerator
 
 MODEL_REGISTRY = {
     "DBP": DBP,
@@ -61,6 +62,21 @@ def load_model_from_config(config_path, debug):
 
     # remove unwanted entries
     config.pop("model_type", None)
+
+    # Parse accelerator setting
+    accelerator_str = config.pop("accelerator", "cuda").lower()
+
+    if accelerator_str == "cpu":
+        accelerator = Accelerator(cpu=True)
+    elif accelerator_str == "cuda":
+        temp_accelerator = Accelerator()
+        if not temp_accelerator.device.type.startswith("cuda"):
+            raise RuntimeError("Requested 'cuda' but no CUDA device is available.")
+        accelerator = temp_accelerator
+    else:
+        raise ValueError(f"Unknown accelerator type: '{accelerator_str}'. Use 'cpu' or 'cuda'.")
+
+    config["accelerator"] = accelerator
 
     # initilize the model
     model = ModelClass(**config)

@@ -11,9 +11,9 @@ from accelerate import Accelerator
 accelerator = Accelerator()
 
 # training, validation and testing paths
-training_path = '/rds/user/as3628/hpc-work/final_project_dis/data/ground_truth_train'
-validation_path = '/rds/user/as3628/hpc-work/final_project_dis/data/ground_truth_validation'
-test_path = '/rds/user/as3628/hpc-work/final_project_dis/data/ground_truth_test'
+training_path = '/rds/user/as3628/hpc-work/final_project_dis/as3628/data/ground_truth_train'
+validation_path = '/rds/user/as3628/hpc-work/final_project_dis/as3628/data/ground_truth_validation'
+test_path = '/rds/user/as3628/hpc-work/final_project_dis/as3628/data/ground_truth_test'
 
 
 # define parameters
@@ -31,9 +31,9 @@ epochs = 3
 learning_rate = 1e-5
 scheduler = True
 patience = 20
-model_path = "/rds/user/as3628/hpc-work/final_project_dis/models/dbp_first_model"
-log_file = "/rds/user/as3628/hpc-work/final_project_dis/models/logs/dbp_first_model_training.log"
-figure_path = "/rds/user/as3628/hpc-work/final_project_dis/models/figures/dbp_first_model"
+model_path = "/rds/user/as3628/hpc-work/final_project_dis/as3628/models/dbp_first_model"
+log_file = "/rds/user/as3628/hpc-work/final_project_dis/as3628/models/logs/dbp_first_model_training.log"
+figure_path = "/rds/user/as3628/hpc-work/final_project_dis/as3628/models/figures/dbp_first_model"
 
 
 # define model arquitecture

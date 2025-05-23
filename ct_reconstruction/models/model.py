@@ -158,8 +158,6 @@ class ModelBase(Module):
         Returns:
             tuple: (train_dataloader, val_dataloader)
         """
-        # looking if we are using data from google storage
-        is_gcs = self.training_path.startswith("gs://")
 
         
         # load training and validation datasets
@@ -200,9 +198,8 @@ class ModelBase(Module):
             train_data,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=0 if is_gcs else 4,
+            num_workers=0,
             pin_memory=True,
-            persistent_workers=not is_gcs,
             generator=g,
             worker_init_fn=lambda _: np.random.seed(self.seed)
         )
@@ -211,9 +208,8 @@ class ModelBase(Module):
             val_data,
             batch_size=self.batch_size,
             shuffle=False, # validation and test do not need shuffle
-            num_workers=0 if is_gcs else 4,
-            pin_memory=True,
-            persistent_workers=not is_gcs,
+            num_workers=0,
+            pin_memory=True
         ) 
 
         return (train_dataloader, val_dataloader)
@@ -256,7 +252,7 @@ class ModelBase(Module):
 
 
 
-    def train_one_epoch(self, train_dataloader, opt, loss, e):
+    def train_one_epoch(self, train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt):
         """
         Trains the model for a single epoch.
 
@@ -276,7 +272,7 @@ class ModelBase(Module):
         total_train_loss = 0
 
         # loop over the training set
-        for batch_idx, batch in enumerate(train_dataloader):
+        for batch in train_dataloader:
 
             # send the input to the device
             ground_truth = batch["ground_truth"]
@@ -301,11 +297,18 @@ class ModelBase(Module):
 
             # add the loss to the total training loss so far
             total_train_loss += loss_value.item()
-        
+
+        if show_examples and fixed_input is not None and fixed_gt is not None and e % 5 == 0:
+            with torch.no_grad():  # Asegura que no guarda gradientes
+                fixed_pred = self.model(fixed_input)
+                for i in range(min(number_of_examples, fixed_pred.shape[0])):
+                    show_example_epoch(fixed_pred[i], fixed_gt[i], e, f"{save_path}_epochs_{i}")
+                    print(f"[INFO] Saved example figure: {save_path}_epochs_{i}_{e}.png")
+                
         return total_train_loss
 
 
-    def validation(self, val_dataloader, loss, mse_fn, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt):
+    def validation(self, val_dataloader, loss, mse_fn, e):
         """
         Evaluates the model on the validation dataset.
 
@@ -324,13 +327,6 @@ class ModelBase(Module):
 
             # set the model in evaluation mode
             self.model.eval()
-
-            # show exmaple
-            if show_examples and fixed_input is not None and fixed_gt is not None:
-                fixed_pred = self.model(fixed_input)
-                for i in range(min(number_of_examples, fixed_pred.shape[0])):
-                    show_example_epoch(fixed_pred[i], fixed_gt[i], e, f"{save_path}_epochs_{i}")
-                    print(f"[INFO] Saved example figure: {save_path}_epochs_{i}_{e}.png")
 
             # initialize validation metrics
             total_val_loss = 0
@@ -453,10 +449,10 @@ class ModelBase(Module):
         for e in t:
 
             # call the training function
-            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e)
+            total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt)
 
             # call the validation function
-            total_val_loss, total_psnr, total_ssim = self.validation(val_dataloader, loss, mse_fn, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt)
+            total_val_loss, total_psnr, total_ssim = self.validation(val_dataloader, loss, mse_fn, e)
 
             # update our training history
             avg_train_loss = total_train_loss / len(train_dataloader)
@@ -545,9 +541,9 @@ class ModelBase(Module):
         test_dataloader = DataLoader(test_data, 
         batch_size=self.batch_size, 
         shuffle=False, 
-        num_workers=0 if is_gcs else 4,
+        num_workers=0,
         pin_memory=True,
-        persistent_workers=not is_gcs) 
+        ) 
 
         return test_dataloader
 

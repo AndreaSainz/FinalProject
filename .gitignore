@@ -35,6 +35,8 @@ docs/sphinx-env/
 
 # Environment variables
 .env
+tomosipo_env/*
+tomosipo_env/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -64,3 +66,12 @@ report/sections/*
 #Data
 Data/*
 data/*
+data/
+
+# job submision
+*.out
+*.wilkes3
+*.wilkes2
+test.sh
+
+Bibliografía.xlsx

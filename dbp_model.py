@@ -11,9 +11,15 @@ from accelerate import Accelerator
 accelerator = Accelerator()
 
 # training, validation and testing paths
+<<<<<<< Updated upstream
 training_path = '/rds/user/as3628/hpc-work/final_project_dis/as3628/data/ground_truth_train'
 validation_path = '/rds/user/as3628/hpc-work/final_project_dis/as3628/data/ground_truth_validation'
 test_path = '/rds/user/as3628/hpc-work/final_project_dis/as3628/data/ground_truth_test'
+=======
+training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_train'
+validation_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_validation'
+test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_test'
+>>>>>>> Stashed changes
 
 
 # define parameters
@@ -21,19 +27,25 @@ n_single_BP = 16
 alpha = 1
 i_0 = 100000
 sigma = 0.001
-max_len_train = 64
-max_len_val = 16
-max_len_test = 16
+max_len_train = 5
+max_len_val = 5
+max_len_test = 5
 seed = 29072000
 debug = True
-batch_size = 32
-epochs = 3
-learning_rate = 1e-5
+batch_size = 5
+epochs = 1
+learning_rate = 1e-3
 scheduler = True
 patience = 20
+<<<<<<< Updated upstream
 model_path = "/rds/user/as3628/hpc-work/final_project_dis/as3628/models/dbp_first_model"
 log_file = "/rds/user/as3628/hpc-work/final_project_dis/as3628/models/logs/dbp_first_model_training.log"
 figure_path = "/rds/user/as3628/hpc-work/final_project_dis/as3628/models/figures/dbp_first_model"
+=======
+model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_first_model"
+log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_first_model_training.log"
+figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_first_model"
+>>>>>>> Stashed changes
 
 
 # define model arquitecture
@@ -50,7 +62,7 @@ results = model_dbp.test(test_path, max_len_test)
 
 #getting plots and results
 model_dbp.results("both", 1, figure_path)
-amples = model_dbp.results("testing", 15, figure_path)
+samples = model_dbp.results("testing", 15, figure_path)
 model_dbp.report_results_images(figure_path, samples)
 model_dbp.report_results_table(figure_path, num_iterations_sirt=200, num_iterations_em=200,
                          num_iterations_tv_min=200, num_iterations_nag_ls=200, lamda=0.0001)

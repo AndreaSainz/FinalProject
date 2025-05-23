@@ -53,6 +53,11 @@ class ModelBase(Module):
         debug (bool): Enables verbose logging.
         seed (int): Random seed for full reproducibility.
         scheduler (bool): Enables learning rate scheduling with ReduceLROnPlateau.
+
+    Example:
+        >>> model = MyModel(model_path='path/to/save', ...)
+        >>> model.train(training_path, validation_path, save_path)
+        >>> model.test(test_path)
     """
 
     def __init__(self, model_path, model_type, single_bp , n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, accelerator,  scheduler = True, log_file='training.log'):

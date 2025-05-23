@@ -82,9 +82,9 @@ class LoDoPaBDataset(Dataset):
         self.fs = gcsfs.GCSFileSystem()
         
         if ground_truth_dir.startswith("gs://"):
-            self.files = [f"gs://{f}" for f in self.fs.ls(ground_truth_dir) if f.endswith('.hdf5')]
+            self.files = [f"gs://{f}" for f in self.fs.ls(ground_truth_dir) if f.endswith('.hdf5') and not f.startswith('._')]
         else:
-            self.files = [os.path.join(ground_truth_dir, f) for f in os.listdir(ground_truth_dir) if f.endswith('.hdf5')]
+            self.files = [os.path.join(ground_truth_dir, f) for f in os.listdir(ground_truth_dir) if f.endswith('.hdf5') and not f.startswith('._')]
 
         # Sort files so I can be sure the last entrance is the last patient
         self.files.sort()

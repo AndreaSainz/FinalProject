@@ -275,10 +275,11 @@ class ModelBase(Module):
 
             # send the input to the device
             ground_truth = batch["ground_truth"]
+
             if self.single_bp:
                 input_data = batch["single_back_projections"]
             else:
-                input_data = batch["noisy_sinogram"]
+                input_data = batch["noisy_sinogram_normalise"]
 
             # perform a forward pass and calculate the training loss
             pred = self.model(input_data)
@@ -339,7 +340,7 @@ class ModelBase(Module):
                 if self.single_bp:
                     input_data = batch["single_back_projections"]
                 else:
-                    input_data = batch["noisy_sinogram"]
+                    input_data = batch["noisy_sinogram_normalise"]
             
                 # make the predictions and calculate the validation loss
                 pred = self.model(input_data)
@@ -425,7 +426,7 @@ class ModelBase(Module):
             fixed_gt = fixed_batch["ground_truth"]
 
         # initialize early stopping
-        early_stopping = EarlyStopping(patience=patience, debug=self.debug, path=f'{self.model_path}_best.pth',  logger=self.logger)
+        early_stopping = EarlyStopping(patience=patience, debug=self.debug, path=f'{self.model_path}',  logger=self.logger, accelerator = self.accelerator)
 
         # initialize scheduler for learning rate
         if self.scheduler:
@@ -588,7 +589,7 @@ class ModelBase(Module):
                 if self.single_bp:
                     input_data = batch["single_back_projections"]
                 else:
-                    input_data = noisy_sino
+                    input_data = batch['noisy_sinogram_normalise']
 
                 
 
@@ -986,7 +987,7 @@ class ModelBase(Module):
         Loads model weights from the specified file.
 
         Args:
-            path (str, optional): Path to the model checkpoint. If None, uses self.model_path + '_best.pth'.
+            path (str, optional): Path to the model checkpoint. If None, uses self.model_path..
 
         Raises:
             FileNotFoundError: If the specified file does not exist.
@@ -996,13 +997,14 @@ class ModelBase(Module):
             raise ValueError("Model instance is not initialized. Set self.model before loading weights.")
 
         if path is None:
-            path = f"{self.model_path}_best.pth"
+            path = self.model_path
 
         if not os.path.exists(path):
             self._log(f"Model file not found: {path}", level="error")
             raise FileNotFoundError(f"Model file not found: {path}")
 
-        self.model.load_state_dict(torch.load(path, map_location=self.device))
+        
+        self.accelerator.load_state(path)
         self.model.to(self.device)
         self._log(f"Model weights loaded from {path}")
 

@@ -170,7 +170,7 @@ class DeepFBP(ModelBase):
             "model_path": self.model_path,
             "filter_type" : self.filter_type,
             "current_phase" : self.current_phase,
-            "accelerator" : self.accelerator,
+            "accelerator" : str(self.accelerator.device),
             "alpha": self.alpha,
             "i_0": self.i_0,
             "sigma": self.sigma,

@@ -1,4 +1,7 @@
 import torch 
+from accelerate import Accelerator
+import os
+
 
 class EarlyStopping:
     """
@@ -19,7 +22,7 @@ class EarlyStopping:
         early_stop (bool): Flag indicating whether training should be stopped early.
     """
 
-    def __init__(self, patience=10, debug=False, delta=0, path='checkpoint.pth', logger=None):
+    def __init__(self, patience=10, debug=False, delta=0, path='checkpoint_dir/', logger=None, accelerator = Accelerator()):
         self.patience = patience
         self.debug = debug
         self.counter = 0
@@ -30,6 +33,11 @@ class EarlyStopping:
         self.path = path
         self.logger = (logger.getChild("EarlyStopping") if logger else logging.getLogger(__name__ + ".earlystopping")) 
         self.logger.propagate = False  # prevents logs from being sent to the parent logger
+        self.accelerator = accelerator
+
+        # create directory if it does not exist
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
 
     def _log(self, msg):
         """
@@ -89,7 +97,11 @@ class EarlyStopping:
         """
         self._log(f"[EarlyStopping] Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}). Saving model...")
         # Save model parameters
-        torch.save(model.state_dict(), self.path)
+        self.accelerator.wait_for_everyone()
+        
+        #Así evitas que múltiples procesos intenten guardar simultáneamente al mismo archivo.
+        if self.accelerator.is_main_process:
+            self.accelerator.save_state(self.path)
         
         # Update the lowest loss observed
         self.val_loss_min = val_loss

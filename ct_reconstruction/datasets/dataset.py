@@ -337,7 +337,7 @@ class LoDoPaBDataset(Dataset):
 
 
         # Normalise noisy sinogram for training porpuses
-        noisy_sinogram, _, _ =  self.minmax_normalize(noisy_sinogram)
+        noisy_sinogram_normalise, _, _ =  self.minmax_normalize(noisy_sinogram)
 
                                                                                 
         #Create single-back projections
@@ -348,8 +348,10 @@ class LoDoPaBDataset(Dataset):
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
             'noisy_sinogram':noisy_sinogram, 
+            'noisy_sinogram_normalise':noisy_sinogram_normalise,
             'single_back_projections': single_back_projections}
         
         return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
-            'noisy_sinogram': noisy_sinogram}
+            'noisy_sinogram': noisy_sinogram,
+            'noisy_sinogram_normalise': noisy_sinogram_normalise}

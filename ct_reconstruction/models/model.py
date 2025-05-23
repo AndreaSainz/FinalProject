@@ -388,11 +388,9 @@ class ModelBase(Module):
         self._set_seed()
 
 
-    
         # load training and validation datasets
         train_dataloader, val_dataloader = self._get_dataloaders()
 
-    
         # show model summary
         self.model.to(self.device)
         if self.single_bp:
@@ -452,11 +450,9 @@ class ModelBase(Module):
             # call the training function
             total_train_loss = self.train_one_epoch(train_dataloader, opt, loss, e)
 
-                
             # call the validation function
             total_val_loss, total_psnr, total_ssim = self.validation(val_dataloader, loss, mse_fn, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt)
 
-            
             # update our training history
             avg_train_loss = total_train_loss / len(train_dataloader)
             avg_val_loss = total_val_loss / len(val_dataloader)

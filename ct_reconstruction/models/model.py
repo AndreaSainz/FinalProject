@@ -933,20 +933,48 @@ class ModelBase(Module):
 
 
 
-    def report_results_table(self, save_path, num_iterations_sirt=100, num_iterations_em=100,
-                         num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001):
+    def report_results_table(self, save_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,
+                         num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False):
+        
+        if only_results:
+            if test_path is None or max_len_test is None:
+                raise ValueError("When only_results=True, both test_path and max_len_test must be provided.")
+    
+            #changing paths parameters
+            self.test_path = test_path
+            self.max_len_test = max_len_test
 
-        # File existence checks
-        if not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
-            self._log("Ground truth .pt files not found", level="error")
-            return
-        if not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
-            self._log("Noisy sinograms .pt files not found", level="error")
-            return
+            # get test data loader
+            test_dataloader = self._get_test_dataloaders()
+            test_dataloader = self.accelerator.prepare(test_dataloader)
 
-        # Load data
-        ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
-        sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
+            # Initilize lists
+            ground_truths = []
+            sinograms = []
+            
+            for batch in tqdm(test_dataloader):
+                # send the input to the device
+                ground_truth = batch['ground_truth']
+                noisy_sino = batch['noisy_sinogram']
+
+                # save gound truth and prediction
+                ground_truths.append(ground_truth.cpu())
+                sinograms.append(noisy_sino.cpu())
+
+
+        else:
+            # File existence checks
+            if not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
+                self._log("Ground truth .pt files not found", level="error")
+                return
+            if not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
+                self._log("Noisy sinograms .pt files not found", level="error")
+                return
+
+            # Load data
+            ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
+            sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
+
 
         metrics = {
             "Algorithm": ["FBP", "SIRT", "EM", "TV-Min", "NAG-LS"],

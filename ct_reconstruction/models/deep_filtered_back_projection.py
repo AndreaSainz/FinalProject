@@ -1,9 +1,7 @@
 import torch
 from torch.nn import Module
-import torch.nn
 from torch.nn import Conv1d, Conv2d, BatchNorm1d, Sequential, PReLU, ReLU, Parameter
 from ..models.model import ModelBase
-from accelerate import Accelerator
 import json
 
 class DeepFBPNetwork(Module):
@@ -264,7 +262,7 @@ class DeepFBP(ModelBase):
         self.current_phase = phase
 
 
-    def train_deepFBP(self, training_path, validation_path, save_path, max_len_train=None, max_len_val=None, patience=10, confirm_train=False, show_examples=True, number_of_examples=1, phase=1):
+    def train_deepFBP(self, training_path, validation_path, save_path, max_len_train=None, max_len_val=None, patience=10, epochs = None, learning_rate= None, confirm_train=False, show_examples=True, number_of_examples=1, phase=1):
         """
         Trains the DeepFBP model using a specific training phase.
 
@@ -286,8 +284,9 @@ class DeepFBP(ModelBase):
         """
         # set the training phase
         self.set_training_phase(phase)
+
         # apply training algorithm from the ModelBase Class
-        history = self.train(training_path, validation_path, f"{save_path}_{self.current_phase}", max_len_train, max_len_val, patience, confirm_train, show_examples, number_of_examples)
+        history = self.train(training_path, validation_path, f"{save_path}_{self.current_phase}", max_len_train, max_len_val, patience,epochs ,learning_rate, confirm_train, show_examples, number_of_examples)
         return history
 
 

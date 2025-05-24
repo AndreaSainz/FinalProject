@@ -1,11 +1,4 @@
-import os
-import astra
-import tomosipo as ts
-from matplotlib import pyplot as plt
-from ct_reconstruction.datasets.dataset import LoDoPaBDataset
 from ct_reconstruction.models.deep_back_projection import DBP
-import h5py
-import torch
 from accelerate import Accelerator
 
 accelerator = Accelerator()
@@ -22,8 +15,8 @@ alpha = 1
 i_0 = 100000
 sigma = 0.001
 max_len_train = 3200
-max_len_val = 320*4
-max_len_test = 320*4
+max_len_val = 1280
+max_len_test = 1280
 seed = 29072000
 debug = True
 batch_size = 32
@@ -33,15 +26,15 @@ scheduler = True
 patience = 20
 
 
-model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_16_views_1280tr"
-log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_16_views_1280tr.log"
-figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_16_views_1280tr"
+model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_16_views_3200tr"
+log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_16_views_3200_training.log"
+figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_16_views_3200tr"
 
 # define model arquitecture
 model_dbp = DBP(model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file)
 
 # training and validation
-history = model_dbp.train(training_path, validation_path, max_len_train, max_len_val, patience)
+history = model_dbp.train(training_path, validation_path, figure_path, max_len_train, max_len_val, patience)
 
 # saving model configuration
 model_dbp.save_config()
@@ -53,8 +46,6 @@ results = model_dbp.test(test_path, max_len_test)
 model_dbp.results("both", 1, figure_path)
 samples = model_dbp.results("testing", 15, figure_path)
 model_dbp.report_results_images(figure_path, samples)
-model_dbp.report_results_table(figure_path, num_iterations_sirt=200, num_iterations_em=200,
-                         num_iterations_tv_min=200, num_iterations_nag_ls=200, lamda=0.0001)
 
 
 

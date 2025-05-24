@@ -1,5 +1,5 @@
 import tomosipo as ts
-from ts_algorithms import fbp, fdk, sirt, em, tv_min2d, nag_ls
+from ts_algorithms import fbp,sirt, em, tv_min2d, nag_ls
 import torch
 from torch.nn import MSELoss, L1Loss, Module
 from torch.optim import Adam, AdamW
@@ -16,9 +16,6 @@ import json
 import random
 import numpy as np
 from torchsummary import summary
-import matplotlib.pyplot as plt
-import logging
-from accelerate import Accelerator
 import os
 import gc
 import pandas as pd
@@ -217,28 +214,24 @@ class ModelBase(Module):
 
 
 
-    def setup_optimizer_and_loss(self):
+    def setup_optimizer_and_loss(self, learning_rate = None):
         """
         Initializes the optimizer and loss function based on configuration.
         
         Raises:
             ValueError: If the optimizer or loss type is unsupported.
         """
-        #if self.current_phase is not None:
-            #self.set_training_phase(self.current_phase)
-        
-        # Obtener solo los parámetros que tienen requires_grad=True
-        trainable_params = [p for p in self.model.parameters() if p.requires_grad]
-        
-        # Verificar que tenemos parámetros entrenables
-        if not trainable_params:
-            raise RuntimeError(f"No hay parámetros entrenables en la fase {self.current_phase}")
+        #change parameters if neccesary
+        learning_rate = learning_rate or self.learning_rate
 
-        # Optimizador
+        # Get only parameters that have requires_grad=True
+        trainable_params = [p for p in self.model.parameters() if p.requires_grad]
+
+        # Optimizer
         if self.optimizer_type == "Adam":
-            self.optimizer = Adam(trainable_params, lr=self.learning_rate)
+            self.optimizer = Adam(trainable_params, lr=learning_rate)
         elif self.optimizer_type == "AdamW":
-            self.optimizer = AdamW(trainable_params, lr=self.learning_rate)
+            self.optimizer = AdamW(trainable_params, lr=learning_rate)
         else:
             raise ValueError(f"Unsupported optimizer type: {self.optimizer_type}")
 
@@ -388,7 +381,7 @@ class ModelBase(Module):
 
         
 
-    def train(self, training_path, validation_path, save_path, max_len_train = None, max_len_val=None, patience=10, confirm_train=False, show_examples=True, number_of_examples=1):
+    def train(self, training_path, validation_path, save_path, max_len_train = None, max_len_val=None, patience=10, epochs=None, learning_rate=None, confirm_train=False, show_examples=True, number_of_examples=1):
         """
         Performs full training with early stopping, metric logging, and learning rate scheduling.
 
@@ -404,6 +397,8 @@ class ModelBase(Module):
             dict: Training history with average loss, PSNR, and SSIM per epoch.
         """
         #changing paths parameters
+        epochs = epochs or self.epochs
+        learning_rate = learning_rate or self.learning_rate
         self.training_path = training_path
         self.validation_path = validation_path
         self.max_len_train = max_len_train
@@ -432,7 +427,7 @@ class ModelBase(Module):
                 return  
 
         # initialize  optimizer and loss function
-        self.setup_optimizer_and_loss()
+        self.setup_optimizer_and_loss(learning_rate)
         loss = self.loss_fn
 
         # for mse value calculation in case the loss is not MSE
@@ -467,7 +462,7 @@ class ModelBase(Module):
         self._log("Training the network...")
         start_time = time.time()
 
-        t = tqdm(range(self.epochs), desc="Epochs")
+        t = tqdm(range(epochs), desc="Epochs")
 
         # loop over our epochs
         for e in t:
@@ -940,9 +935,6 @@ class ModelBase(Module):
 
     def report_results_table(self, save_path, num_iterations_sirt=100, num_iterations_em=100,
                          num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001):
-        if not self.trained:
-            self._log(f"This model is not trained yet.", level='warning')
-            return
 
         # File existence checks
         if not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):

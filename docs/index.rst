@@ -53,7 +53,7 @@ Follow these steps to set up the environment:
 .. code-block:: bash
 
    # Create and activate virtual environment
-   python3.9 -m venv tomosipo_env
+   python3.9 -m venv tomosipo_en
    source tomosipo_env/bin/activate
 
    # Clone the repository and install in editable mode

@@ -127,6 +127,27 @@ Once the documentation is created open the file index.html located in:
 ```bash
 docs/_build/html
 ```
+
+## Package Structure: `ct_reconstruction`
+
+```
+ct_reconstruction/
+├── callbacks/
+│   └── early_stopping.py         # EarlyStopping with logging
+├── datasets/
+│   └── dataset.py                # LoDoPaBDataset loading, noise simulation, projection logic
+├── models/
+│   ├── deep_back_projection.py   # Deep BackProjection architecture
+│   ├── deep_filtered_back_projection.py  # Learnable Deep FBP using tomosipo
+│   └── model.py                  # Wrapper model loader for training, validation and testing
+├── utils/
+│   ├── loggers.py                # Logging configuration
+│   ├── metrics.py                # PSNR, SSIM, MSE implementations
+│   ├── plotting.py               # Training curves & comparison plots
+│   └── open_files.py             # Helpers to load pretrained models with weights
+└── version.py
+```
+
 ## Data Downloading
 
 To run the training and evaluation pipelines, you need the **LoDoPaB-CT dataset**. Please follow these steps:
@@ -156,28 +177,6 @@ project_root/
 │   ├── ground_truth_validation/
 │   └── ground_truth_test/
 ```
-
-## Package Structure: `ct_reconstruction`
-
-```
-ct_reconstruction/
-├── callbacks/
-│   └── early_stopping.py         # EarlyStopping with logging
-├── datasets/
-│   └── dataset.py                # LoDoPaBDataset loading, noise simulation, projection logic
-├── models/
-│   ├── deep_back_projection.py   # Deep BackProjection architecture
-│   ├── deep_filtered_back_projection.py  # Learnable Deep FBP using tomosipo
-│   └── model.py                  # Wrapper model loader for training, validation and testing
-├── utils/
-│   ├── loggers.py                # Logging configuration
-│   ├── metrics.py                # PSNR, SSIM, MSE implementations
-│   ├── plotting.py               # Training curves & comparison plots
-│   └── open_files.py             # Helpers to load pretrained models with weights
-└── version.py
-```
-
-
 
 
 ## License

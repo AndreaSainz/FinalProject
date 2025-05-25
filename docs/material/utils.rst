@@ -1,31 +1,38 @@
 Utility Functions for CT Reconstruction
 =======================================
 
-This module provides utility functions for evaluating and visualizing CT image reconstruction performance.
+This module provides utility components for evaluating, visualizing, logging, and managing models in CT image reconstruction pipelines.
 
-Included functions:
+Included components:
 
-- ``compute_psnr``: Calculates Peak Signal-to-Noise Ratio.
-- ``compute_ssim``: Computes Structural Similarity Index.
-- ``plot_metric``: Plots training/validation metrics over epochs.
-- ``show_example``: Displays reconstructed vs ground truth images.
+- ``compute_psnr``: Compute PSNR (Peak Signal-to-Noise Ratio) from MSE.
+- ``compute_psnr_results``: Compute PSNR directly from predicted and ground truth tensors.
+- ``compute_ssim``: Compute SSIM (Structural Similarity Index) between images.
+- ``plot_metric``: Plot metrics (e.g. loss) over training epochs.
+- ``show_example``: Visualize side-by-side comparison of reconstruction and ground truth.
+- ``show_example_epoch``: Save or display image comparisons at a specific training epoch.
+- ``plot_different_reconstructions``: Compare deep model output with multiple classical CT reconstructions.
+- ``configure_logger``: Set up and return a logger for experiment tracking.
+- ``open_config_file``: Read and parse a JSON model config file.
+- ``load_model_from_config``: Instantiate and return a model using a config file.
 
 How to Import:
--------------
-After installing the `ct_reconstruction` package, you can import the utilities as follows:
+--------------
 
 .. code-block:: python
 
     from ct_reconstruction.utils.metrics import compute_psnr, compute_ssim
-    from ct_reconstruction.utils.plotting import show_example, plot_metric
+    from ct_reconstruction.utils.plotting import (
+        show_example, plot_metric, show_example_epoch, plot_different_reconstructions
+    )
     from ct_reconstruction.utils.loggers import configure_logger
-    from ct_reconstruction.utils.open_files import load_model_from_config
+    from ct_reconstruction.utils.open_files import load_model_from_config, open_config_file
 
 API Reference
 -------------
 
 Metrics
-^^^^^^^
+-------
 
 .. automodule:: ct_reconstruction.utils.metrics
     :members:
@@ -33,7 +40,7 @@ Metrics
     :show-inheritance:
 
 Plotting
-^^^^^^^^
+--------
 
 .. automodule:: ct_reconstruction.utils.plotting
     :members:
@@ -41,7 +48,7 @@ Plotting
     :show-inheritance:
 
 Loggers
-^^^^^^^
+-------
 
 .. automodule:: ct_reconstruction.utils.loggers
     :members:
@@ -49,7 +56,7 @@ Loggers
     :show-inheritance:
 
 Open Files
-^^^^^^^^^^
+----------
 
 .. automodule:: ct_reconstruction.utils.open_files
     :members:

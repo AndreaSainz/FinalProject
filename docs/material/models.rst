@@ -7,6 +7,7 @@ Included components:
 
 - ``ModelBase``: A reusable base class that handles training, validation, testing, and metric logging.
 - ``DBP``: Deep Back Projection model for CT image reconstruction.
+- ``DeepFBP``: Deep Filtered Back Projection model for CT image reconstruction.
 
 How to Import:
 --------------
@@ -16,6 +17,7 @@ After installing the `ct_reconstruction` package, you can import the models as:
 
     from ct_reconstruction.models.model import ModelBase
     from ct_reconstruction.models.deep_back_projection import DBP
+    from ct_reconstruction.models.deep_filtered_back_projection import DeepFBP
 
 API Reference:
 --------------
@@ -26,6 +28,11 @@ API Reference:
     :show-inheritance:
 
 .. automodule:: ct_reconstruction.models.deep_back_projection
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. automodule:: ct_reconstruction.models.deep_filtered_back_projection
     :members:
     :undoc-members:
     :show-inheritance:

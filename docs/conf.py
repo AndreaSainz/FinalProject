@@ -6,12 +6,12 @@ import sys
 import ct_reconstruction
 
 
-autodoc_mock_imports = ['tomosipo', 'pytorch_msssim']
+autodoc_mock_imports = ['tomosipo', 'ts_algorithms', 'pytorch_msssim']
 
 # -- Project information -----------------------------------------------------
 
 project = 'ct_reconstruction'
-copyright = '2024, Andrea Sainz Bear'
+copyright = '2025, Andrea Sainz Bear'
 author = 'Andrea Sainz Bear'
 release = '0.1.0-beta'
 

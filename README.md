@@ -21,8 +21,17 @@ This project made active use of **OpenAI's ChatGPT** as a development assistant 
 - **Logging & Callbacks**  
   The `configure_logger` function and `EarlyStopping` class were developed with guidance from ChatGPT for clarity and maintainability.
 
+- **DeepFBP Class Construction**  
+  ChatGPT was instrumental in turning my custom filtered backprojection and backprojector scripts into a modular and learnable PyTorch class (`DeepFBP`). It suggested proper `nn.Module` subclassing, tensor-safe differentiable layers, and forward-pass logic integration.
+
 - **Code Refactoring & Optimization**  
   Provided suggestions for making code more modular, scalable, and readable without sacrificing performance.
+
+- **Sphinx Documentation**  
+  Assisted with automating `sphinx-apidoc` integration and helped generate full example docstrings for the `DeepFBP` and `DBP` classes.
+
+- **Example Completion**  
+  Helped complete Jupyter notebook examples and training scripts by inspecting partial code.
 
 - **README Generation**  
   This very README was drafted and refined with help from ChatGPT.
@@ -78,27 +87,10 @@ in your terminal.
 
 If it is not installed, download it from <https://www.python.org/> or use your system’s package manager.
 
-Then, create a conda environment using
-
-**FOR MAC WITH APPLE SILICON**:
+Then, create an environment using
 
 ```bash
-CONDA_SUBDIR=osx-64 conda create -n tomosipo_env python=3.9
-conda activate tomosipo_env 
-```
-Then install the dependecies:
-
-```bash
-conda install -c astra-toolbox/label/dev astra-toolbox
-conda install -c aahendriksen tomosipo
-```
-
-**For Linux/Windows with NVIDIA GPU**: 
-Create everything at once. Make sure you know your CUDA version (e.g., 11.8). Then:
-
-```bash
-conda create -n tomosipo_env cudatoolkit=<X.X> tomosipo -c defaults -c astra-toolbox -c aahendriksen
-conda activate tomosipo_env 
+python3.9 -m venv tomosipo_env
 ```
 
 The specific commmands for the environment are:
@@ -106,47 +98,28 @@ The specific commmands for the environment are:
 For activating the environment:
 
 ```bash
-conda activate tomosipo_env 
+source tomosipo_env/bin/activate
 ```
 When you are done working, deactivate the environment by running 
 
 ```bash
-conda deactivate
+deactivate
 ```
 
 #### Requirements 
 Once **activated**, install all the requirements:
 
 ```bash
-conda env update -f environment.yml
+pip install -r requirements.txt
 ```
 At this point, you are prepared to execute the Jupyter notebooks with the coursework. 
 
 ## Documentation
-In addition to the Python dependencies, you need to have **Pandoc** installed for building the Sphinx documentation.
-
-Follow the instructions below to install Pandoc based on your operating system:
-
-- **Ubuntu/Debian**:
-```bash
-   sudo apt-get install pandoc
-```
-- **macOS (Homebrew)**:
-```bash
-brew install pandoc
-```
-- **Conda**:
-```bash
-conda install -c conda-forge pandoc
-```
-- **Windows**:
-Download and install Pandoc from the official website:
-<https://pandoc.org/installing.html>
-
 To generate documentation using Sphinx run following commands from the root of the repository:
 
 ```bash
 cd docs
+make clean #this is for when you already computed the documentation
 make html
 ```
 Once the documentation is created open the file index.html located in:
@@ -154,39 +127,56 @@ Once the documentation is created open the file index.html located in:
 ```bash
 docs/_build/html
 ```
+## Data Downloading
 
-## Project Structure
+To run the training and evaluation pipelines, you need the **LoDoPaB-CT dataset**. Please follow these steps:
+
+### Download from Zenodo
+
+Dataset page: [https://zenodo.org/records/3384092](https://zenodo.org/records/3384092)
+
+Download the following files:
+
+- `ground_truth_train.zip`
+- `ground_truth_validation.zip`
+- `ground_truth_test.zip`
+
+### Unzip and Organize
+
+1. Unzip all three files.
+2. Create a folder named `data` in the root of the project (if it doesn’t already exist).
+3. Move the extracted folders (`ground_truth_train`, `ground_truth_validation`, `ground_truth_test`) into the `data/` directory.
+
+The structure should look like:
 
 ```
-.
-├── ct_reconstruction/               # Custom package for reconstruction
-│   ├── callbacks/                   # EarlyStopping and callback utilities
-│   ├── datasets/                    # Dataset logic and sinogram simulation
-│   ├── models/                      # Model architectures (e.g., DBP)
-│   └── utils/                       # Logging, plotting, and metrics
-│
-├── docs/                            # Sphinx documentation
-├── dataset_class.ipynb             # Notebook to inspect dataset logic
-├── checking_last_patient.ipynb     # Notebook for final dataset check
-├── README.md                        # This file
-├── Instructions.md
-├── pyproject.toml                   # Project configuration
-├── requirements.txt                # Python dependencies
-└── LICENSE
+project_root/
+├── data/
+│   ├── ground_truth_train/
+│   ├── ground_truth_validation/
+│   └── ground_truth_test/
 ```
 
+## Package Structure: `ct_reconstruction`
 
+```
+ct_reconstruction/
+├── callbacks/
+│   └── early_stopping.py         # EarlyStopping with logging
+├── datasets/
+│   └── dataset.py                # LoDoPaBDataset loading, noise simulation, projection logic
+├── models/
+│   ├── deep_back_projection.py   # Deep BackProjection architecture
+│   ├── deep_filtered_back_projection.py  # Learnable Deep FBP using tomosipo
+│   └── model.py                  # Wrapper model loader for training, validation and testing
+├── utils/
+│   ├── loggers.py                # Logging configuration
+│   ├── metrics.py                # PSNR, SSIM, MSE implementations
+│   ├── plotting.py               # Training curves & comparison plots
+│   └── open_files.py             # Helpers to load pretrained models with weights
+└── version.py
+```
 
-## Description of Custom Package: `ct_reconstruction`
-
-The `ct_reconstruction` package is fully modular and contains:
-
-- `datasets/`: Implements `LoDoPaBDataset`, handles loading, preprocessing, noise simulation, and sparse-view generation.
-- `models/`: Includes `DBP` model class and helpers.
-- `callbacks/`: Contains `EarlyStopping` logic with logging support.
-- `utils/`: Provides plotting utilities, metric functions (PSNR, SSIM), and logger configuration.
-
-All components are integrated into a clean training pipeline using PyTorch and `accelerate`.
 
 
 
@@ -198,9 +188,8 @@ This project is released under the MIT License.
 
 ## Acknowledgments
 
-- [LoDoPaB-CT Dataset](https://www.visnow.org/data/lodopab)
+- [LoDoPaB-CT Dataset](https://www.nature.com/articles/s41597-021-00893-z)
 - [tomosipo](https://github.com/ahendriksen/tomosipo)
-- [pytorch-msssim](https://github.com/VainF/pytorch-msssim)
 - **OpenAI ChatGPT** – for assistance with documentation, code review, modularization, and design.
 
 

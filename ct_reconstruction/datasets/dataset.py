@@ -11,30 +11,71 @@ import logging
 
 class LoDoPaBDataset(Dataset):
     """
-    PyTorch Dataset for low-dose CT reconstruction using LoDoPaB-CT data.
+    PyTorch Dataset for low-dose CT image reconstruction using LoDoPaB-CT data.
 
-    This dataset:
+    This dataset class:
     - Loads ground truth slices from HDF5 files (local or GCS).
-    - Computes forward projections (sinograms).
-    - Simulates realistic noise (Poisson + Gaussian).
-    - Produces sparse-view backprojections at predefined angles.
+    - Computes forward projections (sinograms) using a given operator.
+    - Adds realistic noise (Poisson and Gaussian) to simulate measurements.
+    - Generates sparse-view backprojections using a fixed number of single-angle projections.
 
-    Designed for training deep learning models in CT image reconstruction.
+    Designed for supervised training of deep learning models in sparse-view CT reconstruction.
 
-    Args:
-        ground_truth_dir (str): Path to directory containing HDF5 files with CT slices (can be local or 'gs://').
-        vg (ts.VolumeGeometry): tomosipo volume geometry.
+    Parameters:
+        ground_truth_dir (str): Path to directory or GCS bucket containing .hdf5 CT slices.
+        vg (ts.VolumeGeometry): tomosipo volume geometry describing the image domain.
         angles (np.ndarray): Array of angles used for projection.
-        pg (ts.ProjectionGeometry): tomosipo projection geometry.
-        A (ts.Operator): tomosipo forward operator.
-        n_single_BP (int): Number of single-angle backprojections to simulate.
-        alpha (float): Normalization factor for ground truth scaling.
-        i_0 (float): Incident photon count (for Poisson noise).
-        sigma (float): Standard deviation of Gaussian noise.
+        pg (ts.ProjectionGeometry): tomosipo projection geometry describing acquisition.
+        A (ts.Operator): tomosipo operator performing the forward projection.
+        single_bp (bool): If True, generates a stack of single-angle backprojections.
+        n_single_BP (int): Number of angles to use for backprojection.
+        alpha (float): Scaling factor for normalizing ground truth images.
+        i_0 (float): Incident photon count (used in Poisson noise simulation).
+        sigma (float): Standard deviation of Gaussian noise added to the sinogram.
         seed (int): Random seed for reproducibility.
-        max_len (int, optional): Maximum number of samples to load. If None, uses all slices.
-        debug (bool): If True, prints debug logs to console.
-        logger (logging.Logger, optional): Logger instance. If None, a default is created.
+        max_len (int, optional): Maximum number of samples to load. If None, all slices are used.
+        debug (bool): If True, prints log messages to the console.
+        logger (logging.Logger, optional): Custom logger instance. If None, a default is created.
+
+    Attributes:
+        files (List[str]): List of HDF5 file paths used for training.
+        angles_SBP (np.ndarray): Subset of angles used for sparse backprojection.
+        slices_per_file (int): Number of slices stored per HDF5 file (default: 128).
+        alpha (float): Scaling factor applied to ground truth images.
+        logger (logging.Logger): Logger instance for internal use.
+
+    Example:
+        >>> import tomosipo as ts
+        >>> import numpy as np
+        >>> from ct_reconstruction.datasets import LoDoPaBDataset
+
+        >>> # Define tomosipo geometry
+        >>> vg = ts.volume(shape=(362, 362), size=(26, 26))
+        >>> angles = np.linspace(0, 2 * np.pi, 1000, endpoint=False)
+        >>> pg = ts.cone(angles=angles, src_orig_dist=575, src_det_dist=1050, shape=(1000, 513))
+        >>> A = ts.operator(vg, pg)
+
+        >>> # Initialize dataset (local directory example)
+        >>> dataset = LoDoPaBDataset(
+        ...     ground_truth_dir="data/lodopab/train",
+        ...     vg=vg,
+        ...     angles=angles,
+        ...     pg=pg,
+        ...     A=A,
+        ...     single_bp=True,
+        ...     n_single_BP=16,
+        ...     alpha=5.0,
+        ...     i_0=1e5,
+        ...     sigma=0.01,
+        ...     seed=42,
+        ...     max_len=128,
+        ...     debug=True
+        ... )
+
+        >>> # Access a sample
+        >>> sample = dataset[0]
+        >>> print(sample.keys())
+        dict_keys(['ground_truth', 'sinogram', 'noisy_sinogram', 'noisy_sinogram_normalise', 'single_back_projections'])
     """
 
 
@@ -80,7 +121,7 @@ class LoDoPaBDataset(Dataset):
         # Prepare list of data files
         self.ground_truth_dir = ground_truth_dir
         self.fs = gcsfs.GCSFileSystem()
-        
+    
         if ground_truth_dir.startswith("gs://"):
             self.files = [f"gs://{f}" for f in self.fs.ls(ground_truth_dir) if f.endswith('.hdf5') and not f.startswith('._')]
         else:
@@ -155,28 +196,53 @@ class LoDoPaBDataset(Dataset):
                 f"i_0={self.i_0})")
 
     def minmax_normalize(self, tensor):
+        """
+        Normalizes a tensor to the range [0, 1] using min-max scaling.
 
+        Parameters:
+            tensor (torch.Tensor): Input tensor to normalize.
+
+        Returns:
+            tuple:
+                - norm (torch.Tensor): Normalized tensor.
+                - min_val (float): Minimum value of the original tensor.
+                - max_val (float): Maximum value of the original tensor.
+        """
+        # calculatin min and max from tensor
         min_val = tensor.min()
         max_val = tensor.max()
+
+        #Normalising
         norm = (tensor - min_val) / (max_val - min_val)
         return norm, min_val, max_val
 
     def minmax_denormalize(self, norm_tensor, min_val, max_val):
+        """
+        Reverses min-max normalization using provided min and max values.
+
+        Parameters:
+            norm_tensor (torch.Tensor): Normalized tensor.
+            min_val (float): Original minimum value.
+            max_val (float): Original maximum value.
+
+        Returns:
+            torch.Tensor: Denormalized tensor in original scale.
+        """
         return norm_tensor * (max_val - min_val) + min_val
         
     def noise(self, sinogram):
         """
-        Adds Poisson and Gaussian noise to a sinogram.
+        Adds realistic noise to a sinogram using Poisson and Gaussian processes.
 
-        Simulates realistic CT measurement noise using:
-            - Poisson noise (from X-ray photon counts).
-            - Gaussian noise (detector and system noise).
-
-        Args:
+        Parameters:
             sinogram (torch.Tensor): Clean input sinogram.
 
         Returns:
             torch.Tensor: Noisy sinogram of the same shape.
+
+        Notes:
+            - Poisson noise simulates X-ray photon count fluctuations.
+            - Gaussian noise represents detector/system imperfections.
         """
         # Nomalised sinogram between [0,1] to add noise
         norm_sino, min_val, max_val =  self.minmax_normalize(sinogram)
@@ -221,6 +287,9 @@ class LoDoPaBDataset(Dataset):
 
         Returns:
             torch.Tensor: Image tensor of shape (1, H, W), normalized to [0, alpha].
+
+        Raises:
+            ValueError: If no HDF5 files are found during dataset initialization.
         """
 
         #Calculating the file number. The idx will be a number between 0 and 128*number of files (because each file contains 128 images)
@@ -294,25 +363,21 @@ class LoDoPaBDataset(Dataset):
 
     def __getitem__(self, idx):
         """
-        Returns one training sample consisting of:
-            - Ground truth image.
-            - Clean sinogram.
-            - Noisy sinogram.
-            - Set of single-angle backprojections.
+        Retrieves a single training sample including projections and ground truth.
 
-        Args:
+        Parameters:
             idx (int): Index of the sample to retrieve.
 
         Returns:
-            dict: {
-                'ground_truth' (torch.Tensor): Image tensor (1, H, W),
-                'sinogram' (torch.Tensor): Clean sinogram (1, A, D),
-                'noisy_sinogram' (torch.Tensor): Noisy sinogram (1, A, D),
-                'single_back_projections' (torch.Tensor): Tensor of shape (n_single_BP, H, W)
-            }
+            dict: Dictionary containing:
+                - 'ground_truth' (torch.Tensor): Image (1, H, W).
+                - 'sinogram' (torch.Tensor): Clean sinogram (1, A, D).
+                - 'noisy_sinogram' (torch.Tensor): Noisy sinogram (1, A, D).
+                - 'noisy_sinogram_normalise' (torch.Tensor): Normalized noisy sinogram.
+                - 'single_back_projections' (torch.Tensor): [Optional] (n_single_BP, H, W) if `single_bp=True`.
 
         Raises:
-            IndexError: If idx is out of range for max_len.
+            IndexError: If the index exceeds `max_len`.
         """
 
         #checking the index when I do not want all the files

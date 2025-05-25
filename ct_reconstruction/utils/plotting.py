@@ -1,13 +1,23 @@
 """
-Visualization utilities for CT reconstruction models.
+Visualization utilities for CT reconstruction experiments.
 
-Includes functions to:
-    - Display side-by-side image comparisons (model output vs. ground truth).
-    - Plot training/validation metrics over epochs.
-    - Visualize reconstructions from multiple classical CT algorithms.
-    - Optionally overlay test metrics as horizontal reference lines.
+This module provides helper functions for plotting training curves,
+comparing model outputs against ground truth images, and visualizing
+reconstructions from various CT algorithms.
 
-These tools are used to visually assess model performance during and after training.
+Includes:
+    - Side-by-side image comparisons (output vs. ground truth)
+    - Epoch-based visual tracking of reconstructions
+    - Metric plotting with optional test/reference overlay
+    - Visualization of outputs from multiple reconstruction pipelines
+
+These functions are intended for use in model evaluation, debugging,
+and presentation of CT reconstruction results.
+
+Example:
+    >>> from ct_reconstruction.utils.visualization import show_example, plot_metric
+    >>> show_example(output, target)
+    >>> plot_metric(range(50), {"train": train_loss, "val": val_loss}, "Loss", "Epoch", "MSE")
 """
 
 import matplotlib.pyplot as plt
@@ -15,11 +25,17 @@ import torch
 
 def show_example(output_img, ground_truth):
     """
-    Displays a side-by-side comparison of the model's reconstruction and the ground truth image.
+    Displays a side-by-side comparison of a model reconstruction and its ground truth image.
 
     Args:
-        output_img (torch.Tensor): Reconstructed image from the model. Shape: (1, H, W) or (H, W).
-        ground_truth (torch.Tensor): Ground truth image for comparison. Same shape as output_img.
+        output_img (torch.Tensor): Reconstructed image tensor of shape (H, W) or (1, H, W).
+        ground_truth (torch.Tensor): Ground truth image tensor of the same shape.
+
+    Returns:
+        None. Displays the images using matplotlib.
+
+    Example:
+        >>> show_example(output_img, ground_truth)
     """
 
     # creating one figure with two imagenes
@@ -33,13 +49,16 @@ def show_example(output_img, ground_truth):
 
 def show_example_epoch(output_img, ground_truth, epoch, save_path=None):
     """
-    Displays a side-by-side comparison of the model's reconstruction and the ground truth image.
+    Displays and optionally saves side-by-side images of the reconstruction and ground truth at a specific epoch.
 
     Args:
-        output_img (torch.Tensor): Reconstructed image from the model.
-        ground_truth (torch.Tensor): Ground truth image.
-        epoch (int): Epoch index.
-        save_path (str, optional): Base path to save the figure (without extension).
+        output_img (torch.Tensor): Reconstructed image tensor.
+        ground_truth (torch.Tensor): Ground truth image tensor.
+        epoch (int): Epoch number, used for titles and filenames.
+        save_path (str, optional): If provided, saves the figure to '{save_path}_{epoch}.png'.
+
+    Returns:
+        None
     """
     # creating one figure with two images
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
@@ -57,16 +76,22 @@ def show_example_epoch(output_img, ground_truth, epoch, save_path=None):
 
 def plot_metric(x, y_dict, title, xlabel, ylabel, test_value=None, save_path=None):
     """
-    Plots training/validation metrics over a sequence (e.g., epochs).
+    Plots training and validation metrics over time (e.g., across epochs).
 
     Args:
-        x (list or range): Values for the x-axis (e.g., epoch indices).
-        y_dict (dict): Dictionary of curves to plot. Keys are labels, values are y-values.
+        x (list or range): X-axis values, typically epoch indices.
+        y_dict (dict): Dictionary of metric series to plot. Keys are labels; values are lists of floats.
         title (str): Title of the plot.
         xlabel (str): Label for the x-axis.
         ylabel (str): Label for the y-axis.
-        test_value (float, optional): If provided, adds a horizontal line to indicate a test/reference value.
-        save_path (str, optional): If provided, saves the figure to this path.
+        test_value (float, optional): Optional horizontal line representing test/reference performance.
+        save_path (str, optional): If provided, saves the plot to this path.
+
+    Returns:
+        None
+
+    Example:
+        >>> plot_metric(range(50), {"train": train_loss, "val": val_loss}, "Loss", "Epoch", "MSE")
     """
     
     plt.figure()
@@ -92,15 +117,18 @@ def plot_metric(x, y_dict, title, xlabel, ylabel, test_value=None, save_path=Non
 
 def plot_different_reconstructions(model_type, sample, recon_dict, output_img, ground_truth, save_path=None):
     """
-    Saves plots comparing model output, ground truth, and multiple CT reconstructions.
+    Saves a set of images comparing model outputs, ground truth, and classical CT reconstructions.
 
     Args:
-        model_type (str): Name of the trained model used (e.g., "UNet", "ResNet").
-        sample (int): Sample index used in filenames.
-        recon_dict (dict): Dictionary of reconstructions from various algorithms.
-        output_img (torch.Tensor): Model's predicted reconstruction.
-        ground_truth (torch.Tensor): Ground truth image.
-        save_path (str, optional): Base path to save the output images. Filenames will be suffixed with sample/algorithm.
+        model_type (str): Name of the model used (e.g., "DBP", "UNet").
+        sample (int): Index of the current sample (used in file naming).
+        recon_dict (dict): Dictionary of reconstructions from classical methods. Keys are method names.
+        output_img (torch.Tensor): Model prediction tensor of shape (H, W) or (1, H, W).
+        ground_truth (torch.Tensor): Ground truth tensor.
+        save_path (str, optional): Base path where the figures will be saved.
+
+    Returns:
+        None
     """
 
     #model reconstructed image
@@ -127,5 +155,3 @@ def plot_different_reconstructions(model_type, sample, recon_dict, output_img, g
         plt.tight_layout()
         plt.savefig(f"{save_path}_{sample}_{key}.png")
         plt.close()
-
-

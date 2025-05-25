@@ -1,3 +1,18 @@
+"""
+Model loading utilities for CT reconstruction.
+
+This module provides helper functions for loading models from JSON-based
+configuration files. It supports automatic deserialization of registered model
+classes, assignment of training accelerators, and validation of configurations.
+
+Typical use cases include resuming training, evaluating saved models, or running
+inference in production settings.
+
+Functions:
+    - open_config_file(path, debug): Loads and optionally prints model configuration.
+    - load_model_from_config(config_path, debug): Instantiates a model from configuration.
+"""
+
 import os
 import json
 from ..models.deep_back_projection import DBP
@@ -12,14 +27,25 @@ MODEL_REGISTRY = {
 
 def open_config_file(path,debug):
     """
-    Opens and prints the contents of a model configuration file.
+    Opens and parses a JSON model configuration file.
+
+    This function reads a JSON file located at `{path}_config.json` and optionally
+    prints its contents if debug mode is enabled.
 
     Args:
-        path (str): Path to the JSON configuration file.
+        path (str): Path prefix to the config file (excluding the `_config.json` suffix).
+        debug (bool): If True, prints the parsed configuration to the console.
 
     Returns:
-        dict: Parsed configuration dictionary.
+        dict: Dictionary containing the model configuration.
+
+    Raises:
+        ValueError: If the configuration file does not exist.
+
+    Example:
+        >>> config = open_config_file("checkpoints/dbp", debug=True)
     """
+
     # check if the path exits
     if not os.path.exists(f"{path}_config.json"):
         raise ValueError(f"File not found: {path}_config.json")
@@ -38,13 +64,27 @@ def open_config_file(path,debug):
 
 def load_model_from_config(config_path, debug):
     """
-    Loads a model instance from a saved config JSON file.
+    Loads a model instance from a configuration file.
+
+    This function reconstructs a model using its saved JSON configuration.
+    It dynamically selects the appropriate model class from a registry,
+    resolves the accelerator setting, and instantiates the model with the
+    correct arguments.
 
     Args:
-        config_path (str): Path prefix to the config file (without _config.json).
+        config_path (str): Path prefix to the JSON config file (excluding `_config.json`).
+        debug (bool): If True, prints the loaded configuration to the console.
 
     Returns:
-        ModelBase: Instantiated model with loaded configuration.
+        ModelBase: Instantiated model object ready for training or inference.
+
+    Raises:
+        ValueError: If the model type is not registered or the accelerator type is invalid.
+        RuntimeError: If CUDA is requested but not available.
+
+    Example:
+        >>> model = load_model_from_config("checkpoints/dbp", debug=True)
+        >>> output = model(torch.randn(1, 10, 128, 128))
     """
 
     # get the configuration dictionary
@@ -82,9 +122,3 @@ def load_model_from_config(config_path, debug):
     model = ModelClass(**config)
 
     return model
-
-
-
-
-
-

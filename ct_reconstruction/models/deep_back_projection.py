@@ -25,37 +25,38 @@ from accelerate import Accelerator
 
 class DBP(ModelBase):
     """
-    Deep Backprojection (DBP) network for CT image reconstruction.
+    Deep Backprojection (DBP) network for sparse-view CT image reconstruction.
 
-    This model uses a deep CNN to reconstruct images from multiple single-angle
-    backprojections. It inherits utilities from `ModelBase` for training, evaluation, 
-    and configuration management.
+    This model reconstructs high-quality CT images from multiple single-angle
+    backprojections using a deep convolutional neural network. It extends
+    `ModelBase`, inheriting functionality for training, evaluation, and configuration
+    management.
 
-    The architecture consists of:
-        - Initial layer: Conv2d + ReLU
-        - Middle layers: 15 repeated blocks of Conv2d + BatchNorm2d + ReLU
-        - Final layer: Conv2d (maps to a single channel output)
+    The architecture is composed of:
+        - One initial convolutional block (Conv2d + ReLU).
+        - Fifteen intermediate convolutional blocks (Conv2d + BatchNorm2d + ReLU).
+        - One final convolutional layer without activation.
 
     Args:
-        model_path (str): Directory to save the model weights and logs.
-        n_single_BP (int): Number of single-angle backprojections per input sample.
-        alpha (float): Scaling factor applied to the log-transformed projections.
-        i_0 (float): Incident X-ray intensity, used to simulate Poisson noise.
-        sigma (float): Standard deviation of Gaussian noise to simulate.
-        batch_size (int): Number of training samples per batch.
+        model_path (str): Directory path to save model checkpoints and logs.
+        n_single_BP (int): Number of single-angle backprojections per sample.
+        alpha (float): Scaling factor applied to log-transformed sinograms.
+        i_0 (float): Incident X-ray intensity for simulating Poisson noise.
+        sigma (float): Standard deviation of added Gaussian noise.
+        batch_size (int): Number of samples per training batch.
         epochs (int): Total number of training epochs.
-        learning_rate (float): Initial learning rate for the optimizer.
-        debug (bool): If True, enables debug logging and verbose output.
-        seed (int): Seed for reproducibility.
-        accelerator (torch.device): Device to use (e.g., `torch.device("cuda")`).
-        scheduler (str): Name of learning rate scheduler to use.
-        log_file (str): Path to the log file.
+        learning_rate (float): Learning rate for the optimizer.
+        debug (bool): If True, enables verbose logging and debugging output.
+        seed (int): Random seed for reproducibility.
+        accelerator (torch.device): Computation device (e.g., `torch.device("cuda")`).
+        scheduler (str): Learning rate scheduler name (e.g., "ReduceLROnPlateau").
+        log_file (str): Path to the log file for recording training progress.
 
     Attributes:
-        conv1 (nn.Sequential): Initial convolutional block (Conv2d + ReLU).
-        middle_blocks (nn.ModuleList): List of 15 residual CNN blocks.
-        final (nn.Conv2d): Final convolutional layer (no activation).
-        model (nn.Sequential): Full model assembled sequentially.
+        conv1 (nn.Sequential): Initial convolutional block.
+        middle_blocks (nn.ModuleList): Intermediate convolutional layers.
+        final (nn.Conv2d): Final convolution layer producing single-channel output.
+        model (nn.Sequential): Entire model as a sequential block.
 
     Example:
         >>> import torch
@@ -75,8 +76,9 @@ class DBP(ModelBase):
         ...     scheduler="ReduceLROnPlateau",
         ...     log_file="logs/dbp_training.log"
         ... )
-        >>> output = model(torch.randn(4, 10, 128, 128))  # forward pass
-        >>> model.save_config()  # save hyperparameters
+        >>> x = torch.randn(4, 10, 128, 128)  # input tensor
+        >>> output = model(x)  # forward pass
+        >>> model.save_config()  # save model configuration
     """
 
 
@@ -106,18 +108,18 @@ class DBP(ModelBase):
 
     def initial_layer(self, in_channels, out_channels, kernel_size, stride, padding):
         """
-        Constructs the initial convolutional block of the network.
+        Builds the initial convolutional block of the network.
 
-        Applies:
+        This block consists of:
             - Conv2d
             - ReLU activation
 
         Args:
             in_channels (int): Number of input channels.
             out_channels (int): Number of output channels.
-            kernel_size (int): Size of the convolution kernel.
+            kernel_size (int): Size of the convolutional kernel.
             stride (int): Convolution stride.
-            padding (int): Amount of zero-padding added to both sides.
+            padding (int): Zero-padding to add to each side.
 
         Returns:
             nn.Sequential: A sequential block with Conv2d and ReLU.
@@ -129,19 +131,19 @@ class DBP(ModelBase):
 
     def conv_block(self, in_channels, out_channels, kernel_size, stride, padding):
         """
-        Constructs a middle convolutional block used in the DBP network.
+        Builds an intermediate convolutional block for the DBP architecture.
 
-        Applies:
+        This block includes:
             - Conv2d
             - BatchNorm2d
-            - ReLU
+            - ReLU activation
 
         Args:
-            in_channels (int): Number of input channels.
-            out_channels (int): Number of output channels.
-            kernel_size (int): Convolution kernel size.
-            stride (int): Stride for convolution.
-            padding (int): Padding to be added.
+            in_channels (int): Number of input feature channels.
+            out_channels (int): Number of output feature channels.
+            kernel_size (int): Size of the convolutional kernel.
+            stride (int): Convolution stride.
+            padding (int): Zero-padding to apply.
 
         Returns:
             nn.Sequential: A sequential block with Conv2d, BatchNorm2d, and ReLU.
@@ -153,16 +155,16 @@ class DBP(ModelBase):
 
     def final_layer(self, in_channels, out_channels, kernel_size, stride, padding):
         """
-        Constructs the final convolutional layer that outputs a single-channel image.
+        Builds the final convolutional layer that produces the output image.
 
-        This layer does not apply any activation.
+        This layer does not include an activation function.
 
         Args:
             in_channels (int): Number of input channels.
             out_channels (int): Number of output channels (typically 1).
-            kernel_size (int): Convolution kernel size.
-            stride (int): Stride for convolution.
-            padding (int): Padding to apply.
+            kernel_size (int): Size of the convolutional kernel.
+            stride (int): Convolution stride.
+            padding (int): Zero-padding to apply.
 
         Returns:
             nn.Conv2d: Final convolutional layer.
@@ -176,19 +178,19 @@ class DBP(ModelBase):
         """
         Defines the forward pass of the DBP network.
 
-        Applies:
+        The input is passed sequentially through:
             - Initial convolutional block
-            - 15 middle residual CNN blocks
-            - Final convolution layer
+            - Fifteen intermediate convolutional blocks
+            - Final convolutional layer
 
         Args:
             x (torch.Tensor): Input tensor of shape (B, C, H, W), where:
-                B: batch size,
-                C: number of backprojection channels (n_single_BP),
-                H, W: height and width of the input image.
+                B = batch size,
+                C = number of backprojection channels (`n_single_BP`),
+                H, W = spatial dimensions.
 
         Returns:
-            torch.Tensor: Output tensor of shape (B, 1, H, W), the reconstructed image.
+            torch.Tensor: Output tensor of shape (B, 1, H, W), representing the reconstructed image.
         """
 
         # initial part
@@ -207,10 +209,10 @@ class DBP(ModelBase):
 
     def save_config(self):
         """
-        Saves model hyperparameters and configuration to a JSON file.
+        Saves the model configuration and hyperparameters to a JSON file.
 
-        The file is saved to `{model_path}_config.json`. It includes training parameters,
-        model structure, device, and logging path.
+        The configuration file is saved at `{model_path}_config.json` and includes
+        details such as model type, training settings, device, and logging information.
         """
         config = {
             "model_type": self.model_type,

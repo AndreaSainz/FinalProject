@@ -6,25 +6,31 @@ import json
 
 class DeepFBPNetwork(Module):
     """
-    Deep Filtered Backprojection (FBP) neural network for CT image reconstruction.
+    Internal model for Deep Filtered Backprojection (DeepFBP) CT reconstruction.
 
-    This network implements a learnable version of FBP, incorporating a differentiable filter,
-    interpolation blocks, and a denoising network to enhance reconstructed images.
+    This neural network combines a learnable FBP filtering stage, interpolation blocks,
+    and a CNN-based denoiser to reconstruct high-quality CT images from sinograms.
+
+    Components:
+        - Learnable filter module (shared or per-angle)
+        - Depthwise 1D convolutional interpolators
+        - Differentiable backprojection layer
+        - 2D CNN denoising module
 
     Args:
-        num_detectors (int): Number of detectors in the CT scan geometry.
+        num_detectors (int): Number of detectors in the CT system.
         num_angles (int): Number of projection angles.
-        A (callable): The forward projection operator (Radon transform).
-        filter_type (str): Filter configuration - either "Filter I" (shared) or per-angle.
+        A (callable): Forward projection operator (Radon transform).
+        filter_type (str): Filtering strategy. Use "Filter I" for shared filtering.
 
     Attributes:
-        learnable_filter (LearnableFilter): Learnable frequency-domain filter module.
-        interpolator_{1-3} (Sequential): Depthwise convolutional blocks for angular interpolation.
-        interpolator_conv (Conv1d): Final interpolation layer.
-        denoising_conv_1 (Conv2d): First convolutional layer in denoising module.
-        denoising_res_{1-3} (Sequential): Residual blocks for image denoising.
-        denoising_conv_2 (Conv2d): Final convolutional layer for denoising.
-     """
+        learnable_filter (LearnableFilter): Trainable frequency-domain filter module.
+        interpolator_{1-3} (nn.Sequential): Depthwise 1D convolutional interpolation blocks.
+        interpolator_conv (nn.Conv1d): Final 1D convolutional layer for angular smoothing.
+        denoising_conv_1 (nn.Conv2d): Initial convolution layer for image denoising.
+        denoising_res_{1-3} (nn.Sequential): Intermediate residual blocks for denoising.
+        denoising_conv_2 (nn.Conv2d): Final convolution layer to reconstruct output image.
+    """
 
     def __init__(self, num_detectors, num_angles, A, filter_type):
         # initilize parameter from parent clase Module
@@ -126,15 +132,22 @@ class DeepFBPNetwork(Module):
 
     def forward(self, x):
         """
-        Forward pass of the DeepFBPNetwork.
+        Executes the forward pass through the DeepFBPNetwork.
+
+        The pipeline includes:
+            - Learnable filtering in the frequency domain
+            - Angular interpolation using depthwise convolutions
+            - Differentiable backprojection via custom operator
+            - Denoising using a 2D CNN
 
         Args:
-            x (torch.Tensor): Input sinogram tensor of shape (B, 1, A, D), where
-                B is the batch size, A is the number of angles, and D is the number of detectors.
+            x (torch.Tensor): Input sinogram of shape (B, 1, A, D), where:
+                B = batch size,
+                A = number of projection angles,
+                D = number of detectors.
 
         Returns:
-            torch.Tensor: Reconstructed CT image tensor of shape (B, 1, H, W).
-
+            torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
 
         # Apply filter for frequency domain
@@ -164,32 +177,37 @@ class DeepFBPNetwork(Module):
 
 class DeepFBP(ModelBase):
     """
-    Wrapper class to train and manage the DeepFBPNetwork model.
+    Main interface for training and managing the Deep Filtered Backprojection (DeepFBP) model.
 
-    This class encapsulates the DeepFBP neural network and provides an interface
-    for training in multiple phases, saving configurations, and managing
-    model behavior depending on the reconstruction pipeline needs.
+    This class wraps the `DeepFBPNetwork` and provides a high-level interface for training
+    in structured phases, saving configurations, and controlling model behavior
+    across the CT reconstruction pipeline.
+
+    The DeepFBP model enhances classical Filtered Backprojection by introducing:
+        - Learnable frequency-domain filters
+        - 1D angular interpolation modules
+        - A 2D CNN denoising stage
 
     Args:
-        model_path (str): Path to save or load the model.
-        filter_type (str): Type of filter to use. Options are:
-            - "Filter I": A shared learnable filter across all projection angles.
-            - Any other value: Uses per-angle learnable filters.
-        alpha (float): Scaling factor for log-transformed projections.
-        i_0 (float): Initial photon count (used for simulating Poisson noise).
-        sigma (float): Standard deviation for additive Gaussian noise.
-        batch_size (int): Number of samples per training batch.
+        model_path (str): Path to save model checkpoints and logs.
+        filter_type (str): Type of filter. Options:
+            - "Filter I": Shared filter across angles.
+            - Any other string: Per-angle filters.
+        alpha (float): Log scaling factor for projection values.
+        i_0 (float): Incident photon intensity (used for simulating noise).
+        sigma (float): Gaussian noise standard deviation.
+        batch_size (int): Number of samples per batch.
         epochs (int): Number of training epochs.
-        learning_rate (float): Initial learning rate for optimizer.
-        debug (bool): If True, enables verbose logging and debugging tools.
-        seed (int): Random seed for reproducibility.
-        accelerator (torch.device): The computation device, e.g., `torch.device('cuda')`.
-        scheduler (str): Learning rate scheduler to use ("None", "StepLR", etc.).
-        log_file (str): Path to log file for training output.
+        learning_rate (float): Optimizer learning rate.
+        debug (bool): Enable verbose debug output.
+        seed (int): Seed for reproducibility.
+        accelerator (torch.device): Device for training (e.g., `torch.device("cuda")`).
+        scheduler (str): Learning rate scheduler type.
+        log_file (str): Path to output log file.
 
     Attributes:
-        model (DeepFBPNetwork): The underlying reconstruction model.
-        current_phase (int): Indicates which training phase is active (1, 2, or 3).
+        model (DeepFBPNetwork): Core model instance.
+        current_phase (int): Current training phase (1, 2, or 3).
 
     Example:
         >>> from ct_reconstruction.models import DeepFBP
@@ -324,16 +342,23 @@ class DeepFBP(ModelBase):
 
 class LearnableFilter(Module):
     """
-    Learnable frequency-domain filter module used in FBP.
+    Learnable frequency-domain filter module for CT sinograms.
+
+    This module replaces traditional analytical filters (e.g., Ram-Lak)
+    with trainable parameters. Can operate in shared or per-angle mode.
 
     Args:
-        init_filter (torch.Tensor): Initial filter (1D) in frequency domain.
-        per_angle (bool): Whether to use angle-specific filters.
-        num_angles (int, optional): Required if per_angle is True.
+        init_filter (torch.Tensor): Initial frequency-domain filter (1D).
+        per_angle (bool): If True, create one filter per projection angle.
+        num_angles (int, optional): Required if `per_angle=True`.
+
+    Attributes:
+        weights (nn.Parameter): Filter weights in the frequency domain.
 
     Raises:
-        AssertionError: If num_angles is not provided when per_angle is True.
+        AssertionError: If `per_angle=True` and `num_angles` is not provided.
     """
+
     def __init__(self, init_filter, per_angle=False, num_angles=None):
         super().__init__()
         self.per_angle = per_angle
@@ -377,17 +402,20 @@ class LearnableFilter(Module):
 
 class DifferentiableBackprojection(torch.autograd.Function):
     """
-    Custom autograd function for differentiable backprojection.
+    Differentiable wrapper for the backprojection operator.
 
-    This function allows integration of custom linear operators into
-    PyTorch's computational graph with gradient support.
-
-    This was a construction of Chat GPT to be able to do the backpropagation 
-    for the whole model while using A.T from tomosipo library.
+    Enables gradient flow through custom CT backprojection routines using PyTorch's autograd.
 
     Methods:
-        forward(x, operator): Applies the backprojection operator.
-        backward(grad_output): Returns the gradient with respect to x.
+        forward(x, operator): Applies backprojection using `operator.T(x)`.
+        backward(grad_output): Applies forward projection using `operator(grad_output)`.
+
+    Args:
+        x (torch.Tensor): Input tensor of shape (1, A, D).
+        operator (callable): Custom linear operator (e.g., TomoSipo Radon transform).
+
+    Returns:
+        torch.Tensor: Reconstructed image.
 
     Example:
         >>> image = DifferentiableBackprojection.apply(sinogram, A)

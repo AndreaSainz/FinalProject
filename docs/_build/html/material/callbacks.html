@@ -1,0 +1,194 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EarlyStopping Callback &mdash; ct_reconstruction 0.1.0-beta documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=61a4c737" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=c903bf51"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="Utility Functions for CT Reconstruction" href="utils.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            ct_reconstruction
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="datasets.html">LoDoPaBDataset Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="models.html">Model Architectures and Training Base</a></li>
+<li class="toctree-l1"><a class="reference internal" href="utils.html">Utility Functions for CT Reconstruction</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">EarlyStopping Callback</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#how-to-import">How to Import:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-ct_reconstruction.callbacks.early_stopping">API Reference:</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">ct_reconstruction</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">EarlyStopping Callback</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/material/callbacks.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="earlystopping-callback">
+<h1>EarlyStopping Callback<a class="headerlink" href="#earlystopping-callback" title="Link to this heading"></a></h1>
+<p>Implements early stopping during training to avoid overfitting.</p>
+<p>This class monitors validation loss and stops training when the performance does not improve
+after a given number of epochs (patience). It is typically used in deep learning pipelines.</p>
+<section id="how-to-import">
+<h2>How to Import:<a class="headerlink" href="#how-to-import" title="Link to this heading"></a></h2>
+<p>After installing the <cite>ct_reconstruction</cite> package, you can import the class as:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ct_reconstruction.callbacks.early_stopping</span><span class="w"> </span><span class="kn">import</span> <span class="n">EarlyStopping</span>
+</pre></div>
+</div>
+</section>
+<section id="module-ct_reconstruction.callbacks.early_stopping">
+<span id="api-reference"></span><h2>API Reference:<a class="headerlink" href="#module-ct_reconstruction.callbacks.early_stopping" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="ct_reconstruction.callbacks.early_stopping.EarlyStopping">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ct_reconstruction.callbacks.early_stopping.</span></span><span class="sig-name descname"><span class="pre">EarlyStopping</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patience=10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta=0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path='checkpoint_dir/'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">accelerator=&lt;accelerate.accelerator.Accelerator</span> <span class="pre">object&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.callbacks.early_stopping.EarlyStopping" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Implements early stopping to halt training when the validation loss fails to improve.</p>
+<p>This mechanism helps prevent overfitting by monitoring the validation loss. If the loss 
+does not decrease after a defined number of consecutive epochs (<cite>patience</cite>), training is stopped early. 
+The model with the best (lowest) validation loss is automatically saved to disk using the accelerator.</p>
+<dl>
+<dt>Parameters:</dt><dd><p>patience (int): Optional. Number of epochs to wait after the last improvement before stopping (default: 10).
+debug (bool): Optional. If True, prints log messages to the console in addition to writing to the logger (default: False).
+delta (float): Optional. Minimum change in validation loss to qualify as an improvement (default: 0.0).
+path (str): Optional. Directory path to save the best model checkpoint (default: ‘checkpoint_dir/’).
+logger (logging.Logger): Optional. Logger instance to use for logging messages. If None, a default logger is created (default: None).
+accelerator (accelerate.Accelerator): Optional. Accelerator for managing distributed training and saving state (default: <cite>Accelerator()</cite>).</p>
+</dd>
+<dt>Attributes:</dt><dd><p>early_stop (bool): Flag indicating whether early stopping has been triggered.
+best_score (float or None): Best (lowest) negative validation loss observed so far.
+val_loss_min (float): Lowest validation loss encountered during training.
+counter (int): Number of consecutive epochs without improvement.</p>
+</dd>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">ct_reconstruction.callbacks</span><span class="w"> </span><span class="kn">import</span> <span class="n">EarlyStopping</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">accelerate</span><span class="w"> </span><span class="kn">import</span> <span class="n">Accelerator</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">MyModel</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">accelerator</span> <span class="o">=</span> <span class="n">Accelerator</span><span class="p">()</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Initialize early stopping</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">early_stopping</span> <span class="o">=</span> <span class="n">EarlyStopping</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">patience</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">delta</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">accelerator</span><span class="o">=</span><span class="n">accelerator</span>
+<span class="gp">... </span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">epochs</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">train</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>  <span class="c1"># Replace with actual training logic</span>
+<span class="gp">... </span>    <span class="n">val_loss</span> <span class="o">=</span> <span class="n">evaluate</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>  <span class="c1"># Replace with actual evaluation logic</span>
+<span class="gp">... </span>    <span class="n">early_stopping</span><span class="p">(</span><span class="n">val_loss</span><span class="p">,</span> <span class="n">model</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>…     if early_stopping.early_stop:
+…         print(f”Early stopping triggered at epoch {epoch}”)
+…         break</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="ct_reconstruction.callbacks.early_stopping.EarlyStopping.save_checkpoint">
+<span class="sig-name descname"><span class="pre">save_checkpoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val_loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.callbacks.early_stopping.EarlyStopping.save_checkpoint" title="Link to this definition"></a></dt>
+<dd><p>Saves the model checkpoint if the validation loss has improved.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><p>val_loss (float): The current validation loss.
+model (torch.nn.Module): The model to save.</p>
+</dd>
+<dt>Notes:</dt><dd><ul class="simple">
+<li><p>This method updates the internal best validation loss.</p></li>
+<li><p>Only the main process in a distributed environment performs the actual saving.</p></li>
+<li><p>This method is safe to call in multi-GPU environments. Only the main process will write to disk.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="utils.html" class="btn btn-neutral float-left" title="Utility Functions for CT Reconstruction" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Andrea Sainz Bear.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

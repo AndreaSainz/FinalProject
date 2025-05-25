@@ -42,9 +42,9 @@ tomosipo_env/
 .ipynb_checkpoints
 
 # Sphinx 
-docs/_build
-docs/_static
-docs/_templates
+#docs/_build
+#docs/_static
+#docs/_templates
 
 
 

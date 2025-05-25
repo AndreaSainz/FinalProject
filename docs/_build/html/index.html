@@ -1,0 +1,286 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to ct_reconstruction’s documentation! &mdash; ct_reconstruction 0.1.0-beta documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/sg_gallery.css?v=61a4c737" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=c903bf51"></script>
+      <script src="_static/doctools.js?v=9a2dae69"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="LoDoPaBDataset Class" href="material/datasets.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            ct_reconstruction
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="material/datasets.html">LoDoPaBDataset Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="material/models.html">Model Architectures and Training Base</a></li>
+<li class="toctree-l1"><a class="reference internal" href="material/utils.html">Utility Functions for CT Reconstruction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="material/callbacks.html">EarlyStopping Callback</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">ct_reconstruction</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Welcome to ct_reconstruction’s documentation!</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="welcome-to-ct-reconstruction-s-documentation">
+<h1>Welcome to ct_reconstruction’s documentation!<a class="headerlink" href="#welcome-to-ct-reconstruction-s-documentation" title="Link to this heading"></a></h1>
+<p>This package provides utilities for CT image reconstruction using deep learning.
+It includes datasets, model architectures, training pipelines, and evaluation tools.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Developed for the
+<a class="reference external" href="https://www.postgraduate.study.cam.ac.uk/courses/directory/pcphmpdis">MPhil in Data Intensive Science</a> by Andrea Sainz Bear.</p>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="material/datasets.html">LoDoPaBDataset Class</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="material/datasets.html#how-to-import">How to Import:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="material/datasets.html#module-ct_reconstruction.datasets.dataset">API Reference:</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="material/datasets.html#ct_reconstruction.datasets.dataset.LoDoPaBDataset"><code class="docutils literal notranslate"><span class="pre">LoDoPaBDataset</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="material/models.html">Model Architectures and Training Base</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="material/models.html#how-to-import">How to Import:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="material/models.html#module-ct_reconstruction.models.model">API Reference:</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="material/models.html#ct_reconstruction.models.model.ModelBase"><code class="docutils literal notranslate"><span class="pre">ModelBase</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/models.html#ct_reconstruction.models.deep_back_projection.DBP"><code class="docutils literal notranslate"><span class="pre">DBP</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/models.html#ct_reconstruction.models.deep_filtered_back_projection.DeepFBP"><code class="docutils literal notranslate"><span class="pre">DeepFBP</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/models.html#ct_reconstruction.models.deep_filtered_back_projection.DeepFBPNetwork"><code class="docutils literal notranslate"><span class="pre">DeepFBPNetwork</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/models.html#ct_reconstruction.models.deep_filtered_back_projection.DifferentiableBackprojection"><code class="docutils literal notranslate"><span class="pre">DifferentiableBackprojection</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/models.html#ct_reconstruction.models.deep_filtered_back_projection.LearnableFilter"><code class="docutils literal notranslate"><span class="pre">LearnableFilter</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="material/utils.html">Utility Functions for CT Reconstruction</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="material/utils.html#how-to-import">How to Import:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="material/utils.html#api-reference">API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="material/utils.html#module-ct_reconstruction.utils.metrics">Metrics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.metrics.compute_psnr"><code class="docutils literal notranslate"><span class="pre">compute_psnr()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.metrics.compute_psnr_results"><code class="docutils literal notranslate"><span class="pre">compute_psnr_results()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.metrics.compute_ssim"><code class="docutils literal notranslate"><span class="pre">compute_ssim()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="material/utils.html#module-ct_reconstruction.utils.plotting">Plotting</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.plotting.plot_different_reconstructions"><code class="docutils literal notranslate"><span class="pre">plot_different_reconstructions()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.plotting.plot_metric"><code class="docutils literal notranslate"><span class="pre">plot_metric()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.plotting.show_example"><code class="docutils literal notranslate"><span class="pre">show_example()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.plotting.show_example_epoch"><code class="docutils literal notranslate"><span class="pre">show_example_epoch()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="material/utils.html#module-ct_reconstruction.utils.loggers">Loggers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.loggers.configure_logger"><code class="docutils literal notranslate"><span class="pre">configure_logger()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="material/utils.html#module-ct_reconstruction.utils.open_files">Open Files</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.open_files.load_model_from_config"><code class="docutils literal notranslate"><span class="pre">load_model_from_config()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="material/utils.html#ct_reconstruction.utils.open_files.open_config_file"><code class="docutils literal notranslate"><span class="pre">open_config_file()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="material/callbacks.html">EarlyStopping Callback</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="material/callbacks.html#how-to-import">How to Import:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="material/callbacks.html#module-ct_reconstruction.callbacks.early_stopping">API Reference:</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="material/callbacks.html#ct_reconstruction.callbacks.early_stopping.EarlyStopping"><code class="docutils literal notranslate"><span class="pre">EarlyStopping</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+<section id="features">
+<h2>Features<a class="headerlink" href="#features" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>LoDoPaB dataset integration</strong>
+Seamless access to low-dose CT scan data for model training and benchmarking.</p></li>
+<li><p><strong>Modular model training framework</strong>
+Flexible and extensible deep learning architecture built around Deep Backprojection and Deep Filtered Backprojection networks.</p></li>
+<li><p><strong>Multi-GPU and hardware-agnostic training</strong>
+Fully compatible with multi-GPU setups and CPU/GPU acceleration via the <cite>accelerate</cite> library.</p></li>
+<li><p><strong>Robust evaluation utilities</strong>
+Compute image quality metrics such as PSNR and SSIM for rigorous performance assessment.</p></li>
+<li><p><strong>Comprehensive visualization tools</strong>
+Plot training curves, compare reconstructions side-by-side, and generate figures for publications or debugging.</p></li>
+<li><p><strong>Training callbacks system</strong>
+Built-in support for early stopping, custom metric logging, and training hooks to facilitate efficient experimentation.</p></li>
+</ul>
+</section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
+<p>Ensure you have Python ≥3.9 installed.</p>
+<p>Follow these steps to set up the environment:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create and activate virtual environment</span>
+python3.9<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>tomosipo_env
+<span class="nb">source</span><span class="w"> </span>tomosipo_venv/bin/activate
+
+<span class="c1"># Clone the repository and install in editable mode</span>
+git<span class="w"> </span>clone<span class="w"> </span>https://gitlab.developers.cam.ac.uk/phy/data-intensive-science-mphil/assessments/projects/as3628.git
+<span class="nb">cd</span><span class="w"> </span>as3628
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+
+<span class="c1"># Install dependencies</span>
+pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
+</pre></div>
+</div>
+</section>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h2>
+<p>The following example demonstrates the complete workflow using the <cite>DBP</cite> model: training, validation, testing, and result generation.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ct_reconstruction.models.deep_back_projection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DBP</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">accelerate</span><span class="w"> </span><span class="kn">import</span> <span class="n">Accelerator</span>
+
+<span class="c1"># Hardware setup</span>
+<span class="n">accelerator</span> <span class="o">=</span> <span class="n">Accelerator</span><span class="p">()</span>
+
+<span class="c1"># Paths to data and output directories</span>
+<span class="n">training_path</span> <span class="o">=</span> <span class="s2">&quot;/path/to/data/ground_truth_train&quot;</span>
+<span class="n">validation_path</span> <span class="o">=</span> <span class="s2">&quot;/path/to/data/ground_truth_validation&quot;</span>
+<span class="n">test_path</span> <span class="o">=</span> <span class="s2">&quot;/path/to/data/ground_truth_test&quot;</span>
+<span class="n">model_path</span> <span class="o">=</span> <span class="s2">&quot;/path/to/models/dbp_16_views_proof&quot;</span>
+<span class="n">log_file</span> <span class="o">=</span> <span class="s2">&quot;/path/to/models/logs/dbp_16_views_proof_training.log&quot;</span>
+<span class="n">figure_path</span> <span class="o">=</span> <span class="s2">&quot;/path/to/models/figures/dbp_16_views_proof&quot;</span>
+
+<span class="c1"># Model hyperparameters</span>
+<span class="n">model_dbp</span> <span class="o">=</span> <span class="n">DBP</span><span class="p">(</span>
+    <span class="n">model_path</span><span class="o">=</span><span class="n">model_path</span><span class="p">,</span>
+    <span class="n">n_single_BP</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">i_0</span><span class="o">=</span><span class="mi">100000</span><span class="p">,</span>
+    <span class="n">sigma</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span>
+    <span class="n">batch_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+    <span class="n">epochs</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">seed</span><span class="o">=</span><span class="mi">29072000</span><span class="p">,</span>
+    <span class="n">accelerator</span><span class="o">=</span><span class="n">accelerator</span><span class="p">,</span>
+    <span class="n">scheduler</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">log_file</span><span class="o">=</span><span class="n">log_file</span>
+<span class="p">)</span>
+
+<span class="c1"># Train and validate model</span>
+<span class="n">history</span> <span class="o">=</span> <span class="n">model_dbp</span><span class="o">.</span><span class="n">train</span><span class="p">(</span>
+    <span class="n">training_path</span><span class="o">=</span><span class="n">training_path</span><span class="p">,</span>
+    <span class="n">validation_path</span><span class="o">=</span><span class="n">validation_path</span><span class="p">,</span>
+    <span class="n">figure_path</span><span class="o">=</span><span class="n">figure_path</span><span class="p">,</span>
+    <span class="n">max_len_train</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+    <span class="n">max_len_val</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+    <span class="n">patience</span><span class="o">=</span><span class="mi">20</span>
+<span class="p">)</span>
+
+<span class="c1"># Save configuration for reproducibility</span>
+<span class="n">model_dbp</span><span class="o">.</span><span class="n">save_config</span><span class="p">()</span>
+
+<span class="c1"># Evaluate on test set</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">model_dbp</span><span class="o">.</span><span class="n">test</span><span class="p">(</span><span class="n">test_path</span><span class="p">,</span> <span class="n">max_len_test</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+
+<span class="c1"># Generate qualitative and quantitative result visualizations</span>
+<span class="n">model_dbp</span><span class="o">.</span><span class="n">results</span><span class="p">(</span><span class="s2">&quot;both&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">figure_path</span><span class="p">)</span>
+<span class="n">samples</span> <span class="o">=</span> <span class="n">model_dbp</span><span class="o">.</span><span class="n">results</span><span class="p">(</span><span class="s2">&quot;testing&quot;</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="n">figure_path</span><span class="p">)</span>
+<span class="n">model_dbp</span><span class="o">.</span><span class="n">report_results_images</span><span class="p">(</span><span class="n">figure_path</span><span class="p">,</span> <span class="n">samples</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="contributing">
+<h2>Contributing<a class="headerlink" href="#contributing" title="Link to this heading"></a></h2>
+<p>Contributions are welcome! Fork this repository and submit a pull request.</p>
+</section>
+<section id="license">
+<h2>License<a class="headerlink" href="#license" title="Link to this heading"></a></h2>
+<p>This project is licensed under the MIT License - see the <cite>LICENSE</cite> file for details.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="material/datasets.html" class="btn btn-neutral float-right" title="LoDoPaBDataset Class" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Andrea Sainz Bear.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

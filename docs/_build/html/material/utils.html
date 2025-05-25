@@ -1,0 +1,419 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Utility Functions for CT Reconstruction &mdash; ct_reconstruction 0.1.0-beta documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=61a4c737" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=c903bf51"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="EarlyStopping Callback" href="callbacks.html" />
+    <link rel="prev" title="Model Architectures and Training Base" href="models.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            ct_reconstruction
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="datasets.html">LoDoPaBDataset Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="models.html">Model Architectures and Training Base</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Utility Functions for CT Reconstruction</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#how-to-import">How to Import:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#api-reference">API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-ct_reconstruction.utils.metrics">Metrics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-ct_reconstruction.utils.plotting">Plotting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-ct_reconstruction.utils.loggers">Loggers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-ct_reconstruction.utils.open_files">Open Files</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="callbacks.html">EarlyStopping Callback</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">ct_reconstruction</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Utility Functions for CT Reconstruction</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/material/utils.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="utility-functions-for-ct-reconstruction">
+<h1>Utility Functions for CT Reconstruction<a class="headerlink" href="#utility-functions-for-ct-reconstruction" title="Link to this heading"></a></h1>
+<p>This module provides utility components for evaluating, visualizing, logging, and managing models in CT image reconstruction pipelines.</p>
+<p>Included components:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">compute_psnr</span></code>: Compute PSNR (Peak Signal-to-Noise Ratio) from MSE.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">compute_psnr_results</span></code>: Compute PSNR directly from predicted and ground truth tensors.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">compute_ssim</span></code>: Compute SSIM (Structural Similarity Index) between images.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">plot_metric</span></code>: Plot metrics (e.g. loss) over training epochs.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">show_example</span></code>: Visualize side-by-side comparison of reconstruction and ground truth.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">show_example_epoch</span></code>: Save or display image comparisons at a specific training epoch.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">plot_different_reconstructions</span></code>: Compare deep model output with multiple classical CT reconstructions.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">configure_logger</span></code>: Set up and return a logger for experiment tracking.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">open_config_file</span></code>: Read and parse a JSON model config file.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">load_model_from_config</span></code>: Instantiate and return a model using a config file.</p></li>
+</ul>
+<section id="how-to-import">
+<h2>How to Import:<a class="headerlink" href="#how-to-import" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ct_reconstruction.utils.metrics</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_psnr</span><span class="p">,</span> <span class="n">compute_ssim</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ct_reconstruction.utils.plotting</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">show_example</span><span class="p">,</span> <span class="n">plot_metric</span><span class="p">,</span> <span class="n">show_example_epoch</span><span class="p">,</span> <span class="n">plot_different_reconstructions</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ct_reconstruction.utils.loggers</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ct_reconstruction.utils.open_files</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_model_from_config</span><span class="p">,</span> <span class="n">open_config_file</span>
+</pre></div>
+</div>
+</section>
+<section id="api-reference">
+<h2>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading"></a></h2>
+</section>
+<section id="module-ct_reconstruction.utils.metrics">
+<span id="metrics"></span><h2>Metrics<a class="headerlink" href="#module-ct_reconstruction.utils.metrics" title="Link to this heading"></a></h2>
+<p>Utility functions for computing image quality metrics used in CT reconstruction.</p>
+<p>This module includes functions to compute standard evaluation metrics for
+reconstructed images, comparing them against ground truth references.</p>
+<dl class="simple">
+<dt>Metrics implemented:</dt><dd><ul class="simple">
+<li><p>PSNR (Peak Signal-to-Noise Ratio)</p></li>
+<li><p>SSIM (Structural Similarity Index)</p></li>
+</ul>
+</dd>
+</dl>
+<p>These metrics are commonly used in image reconstruction tasks to evaluate
+the fidelity of neural network outputs.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.metrics.compute_psnr">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.metrics.</span></span><span class="sig-name descname"><span class="pre">compute_psnr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mse</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_val</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.metrics.compute_psnr" title="Link to this definition"></a></dt>
+<dd><p>Computes the Peak Signal-to-Noise Ratio (PSNR) from a given MSE value.</p>
+<p>PSNR is a logarithmic metric that quantifies the difference between two images,
+typically used to evaluate reconstruction quality. Higher PSNR values indicate
+better image fidelity.</p>
+<dl>
+<dt>Args:</dt><dd><p>mse (float or torch.Tensor): Mean squared error between the images.
+max_val (float, optional): Maximum possible pixel value (default: 1.0).</p>
+</dd>
+<dt>Returns:</dt><dd><p>float: PSNR value in decibels (dB). Returns infinity if MSE is zero.</p>
+</dd>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">mse_value</span> <span class="o">=</span> <span class="mf">0.001</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">psnr</span> <span class="o">=</span> <span class="n">compute_psnr</span><span class="p">(</span><span class="n">mse_value</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.metrics.compute_psnr_results">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.metrics.</span></span><span class="sig-name descname"><span class="pre">compute_psnr_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pred</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_val</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.metrics.compute_psnr_results" title="Link to this definition"></a></dt>
+<dd><p>Computes the PSNR between a predicted and a ground truth image.</p>
+<p>This function internally calculates the MSE and then applies the PSNR formula.
+Input tensors must have the same shape.</p>
+<dl>
+<dt>Args:</dt><dd><p>pred (torch.Tensor): Reconstructed image tensor of shape (B, C, H, W).
+target (torch.Tensor): Ground truth image tensor of the same shape.
+max_val (float, optional): Maximum possible pixel value (default: 1.0).</p>
+</dd>
+<dt>Returns:</dt><dd><p>float: PSNR value in decibels (dB).</p>
+</dd>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">psnr</span> <span class="o">=</span> <span class="n">compute_psnr_results</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.metrics.compute_ssim">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.metrics.</span></span><span class="sig-name descname"><span class="pre">compute_ssim</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reconstructed</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ground_truth</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_range</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.metrics.compute_ssim" title="Link to this definition"></a></dt>
+<dd><p>Computes the Structural Similarity Index (SSIM) between two images.</p>
+<p>SSIM is a perceptual metric that evaluates image similarity based on luminance,
+contrast, and structural information. Values close to 1.0 indicate high similarity.</p>
+<dl>
+<dt>Args:</dt><dd><p>reconstructed (torch.Tensor): Reconstructed image tensor of shape (B, C, H, W) or (B, H, W).
+ground_truth (torch.Tensor): Ground truth image tensor of shape (B, C, H, W) or (B, H, W).
+data_range (float): The dynamic range of the input data (e.g., 1.0 or 255).</p>
+</dd>
+<dt>Returns:</dt><dd><p>float: SSIM value in the range [-1, 1], where 1.0 indicates perfect similarity.</p>
+</dd>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ssim_score</span> <span class="o">=</span> <span class="n">compute_ssim</span><span class="p">(</span><span class="n">reconstructed</span><span class="p">,</span> <span class="n">ground_truth</span><span class="p">,</span> <span class="n">data_range</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-ct_reconstruction.utils.plotting">
+<span id="plotting"></span><h2>Plotting<a class="headerlink" href="#module-ct_reconstruction.utils.plotting" title="Link to this heading"></a></h2>
+<p>Visualization utilities for CT reconstruction experiments.</p>
+<p>This module provides helper functions for plotting training curves,
+comparing model outputs against ground truth images, and visualizing
+reconstructions from various CT algorithms.</p>
+<dl class="simple">
+<dt>Includes:</dt><dd><ul class="simple">
+<li><p>Side-by-side image comparisons (output vs. ground truth)</p></li>
+<li><p>Epoch-based visual tracking of reconstructions</p></li>
+<li><p>Metric plotting with optional test/reference overlay</p></li>
+<li><p>Visualization of outputs from multiple reconstruction pipelines</p></li>
+</ul>
+</dd>
+</dl>
+<p>These functions are intended for use in model evaluation, debugging,
+and presentation of CT reconstruction results.</p>
+<dl>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">ct_reconstruction.utils.visualization</span><span class="w"> </span><span class="kn">import</span> <span class="n">show_example</span><span class="p">,</span> <span class="n">plot_metric</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">show_example</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plot_metric</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">50</span><span class="p">),</span> <span class="p">{</span><span class="s2">&quot;train&quot;</span><span class="p">:</span> <span class="n">train_loss</span><span class="p">,</span> <span class="s2">&quot;val&quot;</span><span class="p">:</span> <span class="n">val_loss</span><span class="p">},</span> <span class="s2">&quot;Loss&quot;</span><span class="p">,</span> <span class="s2">&quot;Epoch&quot;</span><span class="p">,</span> <span class="s2">&quot;MSE&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.plotting.plot_different_reconstructions">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_different_reconstructions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recon_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_img</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ground_truth</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.plotting.plot_different_reconstructions" title="Link to this definition"></a></dt>
+<dd><p>Saves a set of images comparing model outputs, ground truth, and classical CT reconstructions.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>model_type (str): Name of the model used (e.g., “DBP”, “UNet”).
+sample (int): Index of the current sample (used in file naming).
+recon_dict (dict): Dictionary of reconstructions from classical methods. Keys are method names.
+output_img (torch.Tensor): Model prediction tensor of shape (H, W) or (1, H, W).
+ground_truth (torch.Tensor): Ground truth tensor.
+save_path (str, optional): Base path where the figures will be saved.</p>
+</dd>
+<dt>Returns:</dt><dd><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.plotting.plot_metric">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.plotting.</span></span><span class="sig-name descname"><span class="pre">plot_metric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xlabel</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylabel</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.plotting.plot_metric" title="Link to this definition"></a></dt>
+<dd><p>Plots training and validation metrics over time (e.g., across epochs).</p>
+<dl>
+<dt>Args:</dt><dd><p>x (list or range): X-axis values, typically epoch indices.
+y_dict (dict): Dictionary of metric series to plot. Keys are labels; values are lists of floats.
+title (str): Title of the plot.
+xlabel (str): Label for the x-axis.
+ylabel (str): Label for the y-axis.
+test_value (float, optional): Optional horizontal line representing test/reference performance.
+save_path (str, optional): If provided, saves the plot to this path.</p>
+</dd>
+<dt>Returns:</dt><dd><p>None</p>
+</dd>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">plot_metric</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">50</span><span class="p">),</span> <span class="p">{</span><span class="s2">&quot;train&quot;</span><span class="p">:</span> <span class="n">train_loss</span><span class="p">,</span> <span class="s2">&quot;val&quot;</span><span class="p">:</span> <span class="n">val_loss</span><span class="p">},</span> <span class="s2">&quot;Loss&quot;</span><span class="p">,</span> <span class="s2">&quot;Epoch&quot;</span><span class="p">,</span> <span class="s2">&quot;MSE&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.plotting.show_example">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.plotting.</span></span><span class="sig-name descname"><span class="pre">show_example</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_img</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ground_truth</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.plotting.show_example" title="Link to this definition"></a></dt>
+<dd><p>Displays a side-by-side comparison of a model reconstruction and its ground truth image.</p>
+<dl>
+<dt>Args:</dt><dd><p>output_img (torch.Tensor): Reconstructed image tensor of shape (H, W) or (1, H, W).
+ground_truth (torch.Tensor): Ground truth image tensor of the same shape.</p>
+</dd>
+<dt>Returns:</dt><dd><p>None. Displays the images using matplotlib.</p>
+</dd>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">show_example</span><span class="p">(</span><span class="n">output_img</span><span class="p">,</span> <span class="n">ground_truth</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.plotting.show_example_epoch">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.plotting.</span></span><span class="sig-name descname"><span class="pre">show_example_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_img</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ground_truth</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.plotting.show_example_epoch" title="Link to this definition"></a></dt>
+<dd><p>Displays and optionally saves side-by-side images of the reconstruction and ground truth at a specific epoch.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>output_img (torch.Tensor): Reconstructed image tensor.
+ground_truth (torch.Tensor): Ground truth image tensor.
+epoch (int): Epoch number, used for titles and filenames.
+save_path (str, optional): If provided, saves the figure to ‘{save_path}_{epoch}.png’.</p>
+</dd>
+<dt>Returns:</dt><dd><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-ct_reconstruction.utils.loggers">
+<span id="loggers"></span><h2>Loggers<a class="headerlink" href="#module-ct_reconstruction.utils.loggers" title="Link to this heading"></a></h2>
+<p>Logger configuration utility for consistent project-wide logging.</p>
+<p>This module provides a utility function to create and configure Python loggers
+that write logs to both a file and, optionally, the console. It ensures that
+duplicate handlers are not added and applies a consistent formatting style.</p>
+<p>Typical usage involves importing <cite>configure_logger</cite> and initializing a logger
+at the top of each module or script.</p>
+<dl class="simple">
+<dt>Functions:</dt><dd><p>configure_logger(name, log_file, debug=False): Returns a configured logger instance.</p>
+</dd>
+</dl>
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.loggers.configure_logger">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.loggers.</span></span><span class="sig-name descname"><span class="pre">configure_logger</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.loggers.configure_logger" title="Link to this definition"></a></dt>
+<dd><p>Creates and configures a logger that writes logs to a file and optionally to the console.</p>
+<p>The logger uses a consistent format and avoids duplicate handlers, making it suitable
+for module-level or project-wide logging.</p>
+<dl>
+<dt>Args:</dt><dd><p>name (str): Name of the logger instance, typically <cite>__name__</cite>.
+log_file (str): Path to the log file where outputs will be saved in append mode.
+debug (bool): If True, also prints logs to the console via stdout.</p>
+</dd>
+<dt>Returns:</dt><dd><p>logging.Logger: A configured logger instance with file and optional stream handlers.</p>
+</dd>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">ct_reconstruction.utils.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_logger</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logger</span> <span class="o">=</span> <span class="n">configure_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">,</span> <span class="s2">&quot;logs/run.log&quot;</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Logger initialized.&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-ct_reconstruction.utils.open_files">
+<span id="open-files"></span><h2>Open Files<a class="headerlink" href="#module-ct_reconstruction.utils.open_files" title="Link to this heading"></a></h2>
+<p>Model loading utilities for CT reconstruction.</p>
+<p>This module provides helper functions for loading models from JSON-based
+configuration files. It supports automatic deserialization of registered model
+classes, assignment of training accelerators, and validation of configurations.</p>
+<p>Typical use cases include resuming training, evaluating saved models, or running
+inference in production settings.</p>
+<dl class="simple">
+<dt>Functions:</dt><dd><ul class="simple">
+<li><p>open_config_file(path, debug): Loads and optionally prints model configuration.</p></li>
+<li><p>load_model_from_config(config_path, debug): Instantiates a model from configuration.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.open_files.load_model_from_config">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.open_files.</span></span><span class="sig-name descname"><span class="pre">load_model_from_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.open_files.load_model_from_config" title="Link to this definition"></a></dt>
+<dd><p>Loads a model instance from a configuration file.</p>
+<p>This function reconstructs a model using its saved JSON configuration.
+It dynamically selects the appropriate model class from a registry,
+resolves the accelerator setting, and instantiates the model with the
+correct arguments.</p>
+<dl>
+<dt>Args:</dt><dd><p>config_path (str): Path prefix to the JSON config file (excluding <cite>_config.json</cite>).
+debug (bool): If True, prints the loaded configuration to the console.</p>
+</dd>
+<dt>Returns:</dt><dd><p>ModelBase: Instantiated model object ready for training or inference.</p>
+</dd>
+<dt>Raises:</dt><dd><p>ValueError: If the model type is not registered or the accelerator type is invalid.
+RuntimeError: If CUDA is requested but not available.</p>
+</dd>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">load_model_from_config</span><span class="p">(</span><span class="s2">&quot;checkpoints/dbp&quot;</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">))</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ct_reconstruction.utils.open_files.open_config_file">
+<span class="sig-prename descclassname"><span class="pre">ct_reconstruction.utils.open_files.</span></span><span class="sig-name descname"><span class="pre">open_config_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ct_reconstruction.utils.open_files.open_config_file" title="Link to this definition"></a></dt>
+<dd><p>Opens and parses a JSON model configuration file.</p>
+<p>This function reads a JSON file located at <cite>{path}_config.json</cite> and optionally
+prints its contents if debug mode is enabled.</p>
+<dl>
+<dt>Args:</dt><dd><p>path (str): Path prefix to the config file (excluding the <cite>_config.json</cite> suffix).
+debug (bool): If True, prints the parsed configuration to the console.</p>
+</dd>
+<dt>Returns:</dt><dd><p>dict: Dictionary containing the model configuration.</p>
+</dd>
+<dt>Raises:</dt><dd><p>ValueError: If the configuration file does not exist.</p>
+</dd>
+<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">config</span> <span class="o">=</span> <span class="n">open_config_file</span><span class="p">(</span><span class="s2">&quot;checkpoints/dbp&quot;</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="models.html" class="btn btn-neutral float-left" title="Model Architectures and Training Base" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="callbacks.html" class="btn btn-neutral float-right" title="EarlyStopping Callback" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Andrea Sainz Bear.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -54,7 +54,7 @@ Follow these steps to set up the environment:
 
    # Create and activate virtual environment
    python3.9 -m venv tomosipo_env
-   source tomosipo_venv/bin/activate
+   source tomosipo_env/bin/activate
 
    # Clone the repository and install in editable mode
    git clone https://gitlab.developers.cam.ac.uk/phy/data-intensive-science-mphil/assessments/projects/as3628.git

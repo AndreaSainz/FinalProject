@@ -161,12 +161,15 @@ Download the following files:
 - `ground_truth_train.zip`
 - `ground_truth_validation.zip`
 - `ground_truth_test.zip`
+- `observation_train.zip`
+- `observation_validation.zip`
+- `observation_test.zip`
 
 ### Unzip and Organize
 
 1. Unzip all three files.
-2. Create a folder named `data` in the root of the project (if it doesn’t already exist).
-3. Move the extracted folders (`ground_truth_train`, `ground_truth_validation`, `ground_truth_test`) into the `data/` directory.
+2. Create a folder named `data` in the root of the project (if it does not already exist).
+3. Move the extracted folders  into the `data/` directory.
 
 The structure should look like:
 
@@ -176,6 +179,9 @@ project_root/
 │   ├── ground_truth_train/
 │   ├── ground_truth_validation/
 │   └── ground_truth_test/
+│   ├── observation_train/
+│   ├── observation_validation/
+│   └── observation_test/
 ```
 
 
@@ -189,7 +195,6 @@ This project is released under the MIT License.
 
 - [LoDoPaB-CT Dataset](https://www.nature.com/articles/s41597-021-00893-z)
 - [tomosipo](https://github.com/ahendriksen/tomosipo)
-- **OpenAI ChatGPT** – for assistance with documentation, code review, modularization, and design.
 
 
 

@@ -3,6 +3,8 @@ from torch.nn import Module
 from torch.nn import Conv1d, Conv2d, BatchNorm1d, Sequential, PReLU, ReLU, Parameter
 from ..models.model import ModelBase
 import json
+import tomosipo as ts
+import numpy as np
 
 class DeepFBPNetwork(Module):
     """
@@ -38,8 +40,8 @@ class DeepFBPNetwork(Module):
 
         #Initilize all attributes for this class
         self.num_detectors = num_detectors
-        self.num_angles = num_angles
-        self.A = A
+        self.num_angles_modulo = num_angles
+        self.A_modulo = A
         self.filter_type = filter_type
 
         # initilize filter as ram-lak filter
@@ -49,13 +51,13 @@ class DeepFBPNetwork(Module):
         if self.filter_type == "Filter I":
             self.learnable_filter = LearnableFilter(ram_lak.clone().float(), per_angle=False)
         else:
-            self.learnable_filter = LearnableFilter(ram_lak.clone().float(), per_angle=True, num_angles=self.num_angles)
+            self.learnable_filter = LearnableFilter(ram_lak.clone().float(), per_angle=True, num_angles=self.num_angles_modulo)
 
         #initilize interpolator
-        self.interpolator_1 = self.intermediate_residual_block(num_angles)
-        self.interpolator_2 = self.intermediate_residual_block(num_angles)
-        self.interpolator_3 = self.intermediate_residual_block(num_angles)
-        self.interpolator_conv = Conv1d(num_angles, num_angles, kernel_size=3, stride=1, padding=1)
+        self.interpolator_1 = self.intermediate_residual_block(self.num_angles_modulo)
+        self.interpolator_2 = self.intermediate_residual_block(self.num_angles_modulo)
+        self.interpolator_3 = self.intermediate_residual_block(self.num_angles_modulo)
+        self.interpolator_conv = Conv1d(self.num_angles_modulo, self.num_angles_modulo, kernel_size=3, stride=1, padding=1)
 
         #initilize denoising part
         self.denoising_conv_1 = Conv2d(1, 64, kernel_size=3, stride=1, padding=1)
@@ -164,7 +166,7 @@ class DeepFBPNetwork(Module):
         x = x.unsqueeze(1)               # [B, 1, A, D]
 
         # A.T() only accepts [1, A, D] so we iterate by batch
-        images = [DifferentiableBackprojection.apply(xi, self.A) for xi in x]  
+        images = [DifferentiableBackprojection.apply(xi, self.A_modulo) for xi in x]  
         image = torch.stack(images, dim=0) 
 
         # apply denoiser to the output image
@@ -236,11 +238,25 @@ class DeepFBP(ModelBase):
         >>> model.save_config()
     """
 
-    def __init__(self, model_path, filter_type, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed,accelerator, scheduler, log_file):
-        super().__init__(model_path, "DeepFBP", False, 1, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, accelerator, scheduler, log_file)
+    def __init__(self, model_path, filter_type, sparse_view, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed,accelerator, scheduler, log_file):
+        super().__init__(model_path, "DeepFBP", False, 1, sparse_view, view_angles, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, accelerator, scheduler, log_file)
         self.filter_type = filter_type
-        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles, self.A, self.filter_type)
+        
         self.current_phase = None
+
+        if self.sparse_view:
+            # Create tomosipo volume and projection geometry
+            self.vg_deepfbp = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
+            self.angles_deepfbp = np.linspace(0, np.pi, self.view_angles, endpoint=True)                                          # Angles
+            self.pg_deepfbp = ts.cone(angles = self.angles_deepfbp, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
+            self.A_deepfbp = ts.operator(self.vg_deepfbp,self.pg_deepfbp)
+            self.num_angles_deepfbp = self.view_angles
+        else:
+            self.A_deepfbp = self.A
+            self.num_angles_deepfbp = self.num_angles
+
+
+        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type)
 
     def set_training_phase(self, phase):
         """
@@ -320,6 +336,8 @@ class DeepFBP(ModelBase):
         config = {
             "model_type": self.model_type,
             "model_path": self.model_path,
+            "sparse-view": self.sparse_view,
+            "angle": self.view_angles,
             "filter_type" : self.filter_type,
             "current_phase" : self.current_phase,
             "accelerator" : str(self.accelerator.device),

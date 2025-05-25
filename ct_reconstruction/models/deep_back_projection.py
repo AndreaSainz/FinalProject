@@ -85,7 +85,7 @@ class DBP(ModelBase):
     def __init__(self, model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file):
 
         # Initialize the base training infrastructure
-        super().__init__(model_path, "DBP", True, n_single_BP, alpha, i_0, sigma, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, accelerator, scheduler, log_file)
+        super().__init__(model_path, "DBP", True, n_single_BP, False, 0, alpha, i_0, sigma, batch_size, epochs, "Adam", "MSELoss", learning_rate, debug, seed, accelerator, scheduler, log_file)
         
 
         # initial layer

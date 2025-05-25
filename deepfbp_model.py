@@ -1,14 +1,7 @@
-import os
-import astra
-import tomosipo as ts
-from matplotlib import pyplot as plt
-from ct_reconstruction.datasets.dataset import LoDoPaBDataset
 from ct_reconstruction.models.deep_filtered_back_projection import DeepFBP
-import h5py
-import torch
 from accelerate import Accelerator
 
-accelerator = Accelerator()
+accelerator = Accelerator(fp16=True)
 
 # training, validation and testing paths
 training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_train'

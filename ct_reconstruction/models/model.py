@@ -77,7 +77,7 @@ class ModelBase(Module):
     """
 
 
-    def __init__(self, model_path, model_type, single_bp , n_single_BP, alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, accelerator,  scheduler = True, log_file='training.log'):
+    def __init__(self, model_path, model_type, single_bp , n_single_BP, sparse_view, view_angles,  alpha, i_0, sigma, batch_size, epochs, optimizer_type, loss_type, learning_rate, debug, seed, accelerator,  scheduler = True, log_file='training.log'):
         super().__init__()
 
         #Scan parameters from the paper and data
@@ -91,7 +91,14 @@ class ModelBase(Module):
         self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
         self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
         self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
-        self.A = ts.operator(self.vg,self.pg)                                                                        # Operator
+        self.A = ts.operator(self.vg,self.pg)     
+
+        if self.sparse_view:
+            angles_sparse = np.linspace(0, np.pi, self.view_angles, endpoint=True)
+            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
+            self.A_sparse = ts.operator(self.vg, self.pg_sparse)
+            self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
+
                                                                               
         # dataset parameters
         self.model = None
@@ -100,6 +107,8 @@ class ModelBase(Module):
         self.test_path = None
         self.single_bp = single_bp
         self.n_single_BP = n_single_BP
+        self.sparse_view = sparse_view
+        self.view_angles = view_angles
         self.alpha = alpha
         self.i_0 = i_0
         self.sigma = sigma
@@ -203,13 +212,17 @@ class ModelBase(Module):
             self.A,
             self.single_bp,
             self.n_single_BP,
+            self.sparse_view, 
+            self.view_angles,
+            self.indices,
             self.alpha,
             self.i_0,
             self.sigma,
             self.seed,
             self.max_len_train, 
             False,
-            self.dataset_logger)
+            self.dataset_logger,
+            self.accelerator.device)
 
         val_data = LoDoPaBDataset(self.validation_path, 
             self.vg, 
@@ -218,13 +231,17 @@ class ModelBase(Module):
             self.A, 
             self.single_bp,
             self.n_single_BP, 
+            self.sparse_view, 
+            self.view_angles,
+            self.indices,
             self.alpha,  
             self.i_0, 
             self.sigma, 
             self.seed, 
             self.max_len_val, 
             False, 
-            self.dataset_logger)
+            self.dataset_logger,
+            self.accelerator.device)
 
         # create dataloader for both and a generator for reproducibility
         g = torch.Generator() 
@@ -233,7 +250,7 @@ class ModelBase(Module):
             train_data,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=0,
+            num_workers=4,
             pin_memory=True,
             generator=g,
             worker_init_fn=lambda _: np.random.seed(self.seed)
@@ -243,7 +260,7 @@ class ModelBase(Module):
             val_data,
             batch_size=self.batch_size,
             shuffle=False, # validation and test do not need shuffle
-            num_workers=0,
+            num_workers=4,
             pin_memory=True
         ) 
 
@@ -346,6 +363,8 @@ class ModelBase(Module):
 
             if self.single_bp:
                 input_data = batch["single_back_projections"]
+            elif self.sparse_view:
+                input_data = batch["sparse_sinogram_normalise"]
             else:
                 input_data = batch["noisy_sinogram_normalise"]
 
@@ -426,9 +445,11 @@ class ModelBase(Module):
                 ground_truth = batch["ground_truth"]
                 if self.single_bp:
                     input_data = batch["single_back_projections"]
+                elif self.sparse_view:
+                    input_data = batch["sparse_sinogram_normalise"]
                 else:
                     input_data = batch["noisy_sinogram_normalise"]
-            
+                
                 # make the predictions and calculate the validation loss
                 pred = self.model(input_data)
                 loss_value = loss(pred, ground_truth).item()
@@ -506,8 +527,10 @@ class ModelBase(Module):
         self.model.to(self.device)
         if self.single_bp:
             sample = next(iter(train_dataloader))["single_back_projections"]  # single_back_projections
+        elif self.sparse_view:
+            sample = next(iter(train_dataloader))["sparse_sinogram_normalise"]
         else:
-            sample = next(iter(train_dataloader))["noisy_sinogram"]
+            sample = next(iter(train_dataloader))["noisy_sinogram_normalise"]
         summary(self.model, input_size=tuple(sample.shape[1:]))
 
         # confirmation for the model to be train 
@@ -531,7 +554,14 @@ class ModelBase(Module):
         # fixed one batch if show_example is require
         if show_examples:
             fixed_batch = next(iter(train_dataloader))
-            fixed_input = fixed_batch["single_back_projections"] if self.single_bp else fixed_batch["noisy_sinogram"]
+
+            if self.single_bp:
+                fixed_input = fixed_batch["single_back_projections"] 
+            elif self.sparse_view:
+                fixed_input = fixed_batch["sparse_sinogram_normalise"] 
+            else:
+                fixed_input = fixed_batch["noisy_sinogram_normalise"]
+
             fixed_gt = fixed_batch["ground_truth"]
 
         # initialize early stopping
@@ -637,7 +667,7 @@ class ModelBase(Module):
             >>> self.test_path = "data/test"
             >>> self.max_len_test = 200
             >>> test_loader = self._get_test_dataloaders()
-    """
+        """
 
         test_data = LoDoPaBDataset(self.test_path, 
         self.vg, 
@@ -646,18 +676,22 @@ class ModelBase(Module):
         self.A, 
         self.single_bp,
         self.n_single_BP, 
+        self.sparse_view, 
+        self.view_angles,
+        self.indices
         self.alpha,  
         self.i_0, 
         self.sigma, 
         self.seed, 
         self.max_len_test, 
         False, 
-        self.dataset_logger)
+        self.dataset_logger,
+        self.accelerator.device)
 
         test_dataloader = DataLoader(test_data, 
         batch_size=self.batch_size, 
         shuffle=False, 
-        num_workers=0,
+        num_workers=4,
         pin_memory=True,
         ) 
 
@@ -704,11 +738,16 @@ class ModelBase(Module):
             for batch_id, batch in enumerate(tqdm(test_dataloader)):
                 # send the input to the device
                 ground_truth = batch['ground_truth']
-                noisy_sino = batch['noisy_sinogram']
+
                 if self.single_bp:
                     input_data = batch["single_back_projections"]
+                    noisy_sino = batch['sinogram']
+                elif self.sparse_view:
+                    input_data = batch["sparse_sinogram_normalise"]
+                    noisy_sino = batch["sparse_sinogram"]
                 else:
-                    input_data = batch['noisy_sinogram_normalise']
+                    input_data = batch["noisy_sinogram_normalise"]
+                    noisy_sino = batch['noisy_sinogram']
 
                 
 
@@ -744,7 +783,7 @@ class ModelBase(Module):
 
                     elif torch.backends.mps.is_available():
                         torch.mps.empty_cache()
-
+        
         return predictions, gt_images, noisy_sinograms, total_test_loss, total_psnr, total_ssim
 
 
@@ -792,7 +831,10 @@ class ModelBase(Module):
         self.model, loss, test_dataloader = self.accelerator.prepare(self.model, self.loss_fn, test_dataloader)
 
         # call evaliation function
-        predictions, gt_images, noisy_sinograms, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)
+        if self.sparse_view:
+            predictions, gt_images, sparse_sinograms, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)
+        else:
+            predictions, gt_images, noisy_sinograms, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)
         
     
         # training history
@@ -810,10 +852,14 @@ class ModelBase(Module):
         # save predictions and ground truth
         torch.save(torch.cat(predictions), f"{self.model_path}_predictions_images.pt")
         torch.save(torch.cat(gt_images), f"{self.model_path}_ground_truth_images.pt")
-        torch.save(torch.cat(noisy_sinograms), f"{self.model_path}_noisy_sinograms.pt")
         self._log(f"Predictions saved to {self.model_path}_predictions_images.pt")
         self._log(f"Ground Truth images saved to {self.model_path}_ground_truth_images.pt")
-        self._log(f"Noisy sinograms saved to {self.model_path}_noisy_sinograms.pt")
+        if self.sparse_view:
+            torch.save(torch.cat(sparse_sinograms), f"{self.model_path}_sparse_sinograms.pt")
+            self._log(f"Sparse-view sinograms saved to {self.model_path}_sparse_sinograms.pt")
+        else : 
+            torch.save(torch.cat(noisy_sinograms), f"{self.model_path}_noisy_sinograms.pt")
+            self._log(f"Noisy sinograms saved to {self.model_path}_noisy_sinograms.pt")
 
         # save metrics to file
         with open(f'{self.model_path}_test_metrics.json', 'w') as f:
@@ -957,9 +1003,10 @@ class ModelBase(Module):
             raise ValueError(f"Result mode not supported. Choose when of 'training', 'testing', or 'both")
 
 
+    def _get_operator(self):
+        return self.A_sparse if self.sparse_view else self.A
 
-
-    def other_ct_reconstruction(self, sinogram, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
+    def other_ct_reconstruction(self, sinogram, A, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
         """
         Visualizes training and/or testing results with optional plots and image comparisons.
 
@@ -986,15 +1033,15 @@ class ModelBase(Module):
             sinogram = sinogram[0:1]  # From [10, 1000, 513] → [1, 1000, 513]
 
         # Filtered Backprojection (FBP) reconstruction
-        rec_fbp = fbp(self.A, sinogram)
+        rec_fbp = fbp(A, sinogram)
         #Simultaneous Iterative Reconstruction Technique (SIRT)
-        rec_sirt = sirt(self.A, sinogram, num_iterations_sirt)
+        rec_sirt = sirt(A, sinogram, num_iterations_sirt)
         # Expectation Maximization (EM) reconstruction
-        rec_em = em(self.A, sinogram, num_iterations_em)
+        rec_em = em(A, sinogram, num_iterations_em)
         #Total Variation regularized least squares using Chambolle-Pock algorithm
-        rec_tv_min = tv_min2d(self.A, sinogram, lamda, num_iterations_tv_min)
+        rec_tv_min = tv_min2d(A, sinogram, lamda, num_iterations_tv_min)
         #Nesterov Accelerated Gradient for Least Squares reconstruction 
-        rec_nag_ls = nag_ls(self.A, sinogram, num_iterations_nag_ls)
+        rec_nag_ls = nag_ls(A, sinogram, num_iterations_nag_ls)
 
         return {"fbp": rec_fbp,
             "sirt": rec_sirt,
@@ -1041,18 +1088,25 @@ class ModelBase(Module):
         elif not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
             self._log("Ground truth .pt files not found", level="error")
             return
-
-        elif not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
+        elif not self.sparse_view and not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
             self._log("Noisy sinograms .pt files not found", level="error")
             return
+        elif self.sparse_view and not os.path.exists(f"{self.model_path}_sparse_sinograms.pt"):
+            self._log("Sparse-view sinograms .pt files not found", level="error")
         else:
             predictions = torch.load(f"{self.model_path}_predictions_images.pt")
             ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
-            sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
+            if self.sparse_view:
+                sinograms = torch.load(f"{self.model_path}_sparse_sinograms.pt") 
+            else:
+                sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
+
+        # calculate de A operator for tomosipo 
+        A = self._get_operator()
 
         # generate and save all plots (model reconstructed image, gt image and classical methods reconstrucstions)
         for sample in samples:
-            reconstructions_dict = self.other_ct_reconstruction(sinograms[sample], num_iterations_sirt, num_iterations_em, num_iterations_tv_min, num_iterations_nag_ls, lamda)
+            reconstructions_dict = self.other_ct_reconstruction(sinograms[sample], A, num_iterations_sirt, num_iterations_em, num_iterations_tv_min, num_iterations_nag_ls, lamda)
             plot_different_reconstructions(self.model_type, sample, reconstructions_dict, predictions[sample], ground_truths[sample], save_path)
 
 
@@ -1099,14 +1153,21 @@ class ModelBase(Module):
             # get test data loader
             test_dataloader = self._get_test_dataloaders()
             test_dataloader = self.accelerator.prepare(test_dataloader)
-            
+
+            # calculate de A operator for tomosipo 
+            A = self._get_operator()
+
             for batch in tqdm(test_dataloader):
                 # send the input to the device
                 ground_truth = batch['ground_truth']
-                noisy_sino = batch['noisy_sinogram']
+                if self.sparse_view:
+                    sino = batch['noisy_sinogram']
+                else:
+                    sino = batch['sparse_sinogram']
 
                 recon_dict = self.other_ct_reconstruction(
-                noisy_sino,
+                sino,
+                A,
                 num_iterations_sirt=num_iterations_sirt,
                 num_iterations_em=num_iterations_em,
                 num_iterations_tv_min=num_iterations_tv_min,
@@ -1131,14 +1192,19 @@ class ModelBase(Module):
             if not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
                 self._log("Ground truth .pt files not found", level="error")
                 return
-            if not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
+            if not self.sparse_view and not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
                 self._log("Noisy sinograms .pt files not found", level="error")
                 return
-
+            if self.sparse_view and not os.path.exists(f"{self.model_path}_sparse_sinograms.pt"):
+                self._log("Sparse-view sinograms .pt files not found", level="error")
+                return
+            
             # Load data
             ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
-            sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
-
+            if self.sparse_view:
+                sinograms = torch.load(f"{self.model_path}_sparse_sinograms.pt")
+            else:
+                sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
             n_samples = len(sinograms)
 
             for i in range(n_samples):

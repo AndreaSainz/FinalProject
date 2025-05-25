@@ -1,6 +1,5 @@
 import os
 from torch.utils.data import Dataset
-from ..utils.loggers import configure_logger
 import tomosipo as ts
 import h5py
 import torch
@@ -79,8 +78,11 @@ class LoDoPaBDataset(Dataset):
     """
 
 
-    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None):
-        
+    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, view_angles= 90, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
+
+        if single_bp and sparse_view:
+            ValueError("Sparse-view sinogram and single view backprojections are not compatible now, choose one of them")
+
         #Scan parameters from the paper and data
         self.pixels = 362               # Image resolution of 362x362 pixels on a domain size of 26x26 cm
         self.num_angles = 1000
@@ -90,7 +92,11 @@ class LoDoPaBDataset(Dataset):
         self.slices_per_file = 128
         self.n_single_BP = int(n_single_BP)
         self.single_bp = single_bp
+        self.sparse_view = sparse_view
+        self.view_angles = view_angles
+        self.indices = indices
         self.alpha = alpha
+        self.device= device
         
 
         # Noise parameter  
@@ -194,6 +200,8 @@ class LoDoPaBDataset(Dataset):
                 f"n_single_BP={self.n_single_BP}, "
                 f"noise=Poisson+Gaussian(σ={self.sigma}), "
                 f"i_0={self.i_0})")
+    
+
 
     def minmax_normalize(self, tensor):
         """
@@ -215,6 +223,8 @@ class LoDoPaBDataset(Dataset):
         #Normalising
         norm = (tensor - min_val) / (max_val - min_val)
         return norm, min_val, max_val
+    
+
 
     def minmax_denormalize(self, norm_tensor, min_val, max_val):
         """
@@ -229,8 +239,10 @@ class LoDoPaBDataset(Dataset):
             torch.Tensor: Denormalized tensor in original scale.
         """
         return norm_tensor * (max_val - min_val) + min_val
+    
+
         
-    def noise(self, sinogram):
+    def noise(self, sinogram, idx):
         """
         Adds realistic noise to a sinogram using Poisson and Gaussian processes.
 
@@ -246,12 +258,13 @@ class LoDoPaBDataset(Dataset):
         """
         # Nomalised sinogram between [0,1] to add noise
         norm_sino, min_val, max_val =  self.minmax_normalize(sinogram)
+        norm_sino = norm_sino.to(self.device)
 
-        #Initilizing seed for reproducibility porpuses
-        torch.manual_seed(self.seed)
+        #Initilizing seed generator for reproducibility porpuses (this is for having more than one coworkers)
+        generator = torch.Generator(device=self.device).manual_seed(self.seed + idx)
 
         # Simulate measured photons using Poisson noise (counting error)
-        measured_photons = torch.poisson(self.i_0 * torch.exp(-norm_sino))
+        measured_photons = torch.poisson(self.i_0 * torch.exp(-norm_sino), generator=generator)
 
         # Avoid log(0) by setting the minimum to 1
         measured_photons = torch.clamp(measured_photons, min=1.0)
@@ -298,30 +311,31 @@ class LoDoPaBDataset(Dataset):
         # Get the file corresponding to the index
         file_path = self.files[file_number]
 
+        # Compute the local index within the file
+        local_idx = idx - self.slices_per_file*file_number
+
         # Read the HDF5 file
         if file_path.startswith("gs://"):
             with h5py.File(self.fs.open(file_path, 'rb')) as f:
-                ground_truth = f['data'][:]
+                ground_truth = f['data'][local_idx]
+                sino = f['sinograms'][local_idx]
         else:
             with h5py.File(file_path, 'r') as f:
-                ground_truth = f['data'][:]
+                ground_truth = f['data'][local_idx]
+                sino = f['sinograms'][local_idx]
 
                 
 
         # Convert to tensor
-        sample = torch.tensor(ground_truth, dtype=torch.float32)
+        sample = torch.tensor(ground_truth, dtype=torch.float32).unsqueeze(0)
+        sino = torch.tensor(sino, dtype=torch.float32).unsqueeze(0)
 
-        # Compute the local index within the file
-        local_idx = idx - self.slices_per_file*file_number
 
-        # Extract the specific slice
-        sample_slice = sample[local_idx].unsqueeze(0)      #.unsqueeze(0) ensures the pytorch tensor is in the form (1,362,362) instead of (362,362)
-    
         self._log(f"[Dataset] Taking file number: {file_number}")
         self._log(f"[Dataset] Using file path: {file_path}")
         self._log(f"[Dataset] Taking image number: {local_idx}")
 
-        return sample_slice
+        return sample, sino
 
 
 
@@ -361,6 +375,7 @@ class LoDoPaBDataset(Dataset):
         return single_back_projection
 
 
+
     def __getitem__(self, idx):
         """
         Retrieves a single training sample including projections and ground truth.
@@ -385,20 +400,14 @@ class LoDoPaBDataset(Dataset):
             raise IndexError(f"Index {idx} out of range for max_len={self.max_len}")
 
         # Get image
-        sample_slice = self._get_image_from_file(idx)
+        sample_slice, sinogram = self._get_image_from_file(idx)
 
         #normalise the image into a physical interval
         sample_slice = sample_slice / sample_slice.max()  
         sample_slice = sample_slice * self.alpha
-
-        # Tranform the image to sinogram (it is already a Pytorch tensor)
-        sinogram = self.A(sample_slice)
     
-
-        #self._log(f"[Sinogram] Sinogram - min: {sinogram.min().item():.4f}, max: {sinogram.max().item():.4f}, mean: {sinogram.mean().item():.4f}, std: {sinogram.std().item():.4f}")
-
         # Add nose to sinogram
-        noisy_sinogram = self.noise(sinogram)
+        noisy_sinogram = self.noise(sinogram, idx)
 
 
         # Normalise noisy sinogram for training porpuses
@@ -416,6 +425,17 @@ class LoDoPaBDataset(Dataset):
             'noisy_sinogram_normalise':noisy_sinogram_normalise,
             'single_back_projections': single_back_projections}
         
+        elif self.sparse_view:
+            sparse_sinogram = noisy_sinogram[:, self.indices, :]
+            sparse_sinogram_normalise, _, _ = self.minmax_normalize(sparse_sinogram)
+
+            return {'ground_truth': sample_slice, 
+            'sinogram': sinogram, 
+            'noisy_sinogram': noisy_sinogram, 
+            'noisy_sinogram_normalise':noisy_sinogram_normalise,
+            'sparse_sinogram': sparse_sinogram,
+            'sparse_sinogram_normalise': sparse_sinogram_normalise}
+
         return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
             'noisy_sinogram': noisy_sinogram,

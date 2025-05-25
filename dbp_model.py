@@ -1,7 +1,8 @@
 from ct_reconstruction.models.deep_back_projection import DBP
 from accelerate import Accelerator
 
-accelerator = Accelerator()
+accelerator = Accelerator(fp16=True)
+print(accelerator.state)
 
 # training, validation and testing paths
 training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_train'

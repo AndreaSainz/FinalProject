@@ -68,13 +68,14 @@ report/sections/*
 Data/*
 data/*
 data/
+data_sino/*
+data_sino/
 
 # job submision
 *.out
 *.wilkes3
 *.wilkes2
-dbp.sh
-deepfbp.sh
+*.sh
 Bibliografía.xlsx
 machine.file.*
 models/*

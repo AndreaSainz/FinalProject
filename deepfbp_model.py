@@ -1,9 +1,16 @@
 from ct_reconstruction.models.deep_filtered_back_projection import DeepFBP
 from accelerate import Accelerator
-import torch.multiprocessing as mp
+import torch
 
-mp.set_start_method("spawn", force=True)
+
 accelerator = Accelerator()
+
+# Mostrar el dispositivo que está utilizando
+print("Dispositivo en uso:", accelerator.device)
+
+# Mostrar cuántas GPUs están disponibles
+num_gpus = torch.cuda.device_count()
+print("Número de GPUs disponibles:", num_gpus)
 
 # training, validation and testing paths
 training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_train'

@@ -10,7 +10,7 @@ This project made active use of **OpenAI's ChatGPT** as a development assistant 
 ### Areas Where ChatGPT Was Used
 
 - **Docstring Generation**  
-  ChatGPT was used to autogenerate consistent, professional docstrings for all files, classes, and functions.
+  ChatGPT was used to adjust docstrings for all files, classes, and functions to the style established.
 
 - **Debugging Help**  
   Assisted in resolving tensor shape mismatches, data loader bugs, and training pipeline errors.
@@ -28,20 +28,18 @@ This project made active use of **OpenAI's ChatGPT** as a development assistant 
   Provided suggestions for making code more modular, scalable, and readable without sacrificing performance.
 
 - **Sphinx Documentation**  
-  Assisted with automating `sphinx-apidoc` integration and helped generate full example docstrings for the `DeepFBP` and `DBP` classes.
+  Assisted with automating `sphinx-apidoc` integration and helped generate full example docstrings from my code for the `DeepFBP` and `DBP` classes.
 
-- **Example Completion**  
-  Helped complete Jupyter notebook examples and training scripts by inspecting partial code.
 
 - **README Generation**  
-  This very README was drafted and refined with help from ChatGPT.
+  This README was drafted and refined with help from ChatGPT.
 
 ---
 
 ### Example Interaction
 
 **Prompt:**
-> Could you improve the docstring of this function that calculates PSNR and tell me what a good file-level docstring would look like?
+> Could you improve the docstring of this function following the style i already provide and making them look more professional?
 
 **Response:**
 ``` python
@@ -62,7 +60,7 @@ def compute_psnr(mse, max_val=1.0):
 ```
 
 ## Installation
-For the correct operation of the coursework follow the following steps.
+For the correct operation of the code follow the following steps.
 
 #### Copy the repository
 Clone the repository to your local machine using :
@@ -93,9 +91,8 @@ Then, create an environment using
 python3.9 -m venv tomosipo_env
 ```
 
-The specific commmands for the environment are:
 
-For activating the environment:
+For activating the environment (please note that the environment must be activated for use):
 
 ```bash
 source tomosipo_env/bin/activate
@@ -111,8 +108,16 @@ Once **activated**, install all the requirements:
 
 ```bash
 pip install -r requirements.txt
+pip install -e. #this is for the ct_reconstruction package made for this project)
 ```
-At this point, you are prepared to execute the Jupyter notebooks with the coursework. 
+At this point, you are prepared to execute the code scripts for the projects. 
+
+If when running any of the scripts you find that the tomosipo or tomispo algorithms packages have not been properly installed, run the following commands:
+
+```bash
+pip install git+https://github.com/ahendriksen/tomosipo.git
+pip install git+https://github.com/ahendriksen/ts_algorithms.git
+```
 
 ## Documentation
 To generate documentation using Sphinx run following commands from the root of the repository:
@@ -213,10 +218,11 @@ Each folder contains processed files in a standardized format:
 
 This format ensures consistent pairing and accelerates data loading in your training pipeline.
 
+Note: this hole process should not take more than 2 hours to be completed. The data loader class expect the file to contain an image and the sinogram.
+
 ## License
 
 This project is released under the MIT License.
-
 
 
 ## Acknowledgments

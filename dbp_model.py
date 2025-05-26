@@ -5,9 +5,9 @@ accelerator = Accelerator(fp16=True)
 print(accelerator.state)
 
 # training, validation and testing paths
-training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_train'
-validation_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_validation'
-test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_test'
+training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_train'
+validation_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_validation'
+test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_test'
 
 
 # define parameters
@@ -15,13 +15,13 @@ n_single_BP = 16
 alpha = 1
 i_0 = 100000
 sigma = 0.001
-max_len_train = 1000
-max_len_val = 500
-max_len_test = 1000
+max_len_train = 10
+max_len_val = 5
+max_len_test = 5
 seed = 29072000
 debug = True
-batch_size = 32
-epochs = 100
+batch_size = 2 #32
+epochs = 2
 learning_rate = 1e-3
 scheduler = True
 patience = 20

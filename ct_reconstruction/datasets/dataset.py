@@ -257,7 +257,6 @@ class LoDoPaBDataset(Dataset):
         """
         # Nomalised sinogram between [0,1] to add noise
         norm_sino, min_val, max_val =  self.minmax_normalize(sinogram)
-        norm_sino = norm_sino.to(self.device)
 
         #Initilizing seed generator for reproducibility porpuses (this is for having more than one coworkers)
         generator = torch.Generator(device=self.device).manual_seed(self.seed + idx)
@@ -326,8 +325,8 @@ class LoDoPaBDataset(Dataset):
                 
 
         # Convert to tensor
-        sample = torch.tensor(ground_truth, dtype=torch.float32).unsqueeze(0).to(self.device)
-        sino = torch.tensor(sino, dtype=torch.float32).unsqueeze(0).to(self.device)
+        sample = torch.tensor(ground_truth, dtype=torch.float32).unsqueeze(0)
+        sino = torch.tensor(sino, dtype=torch.float32).unsqueeze(0)
 
 
         self._log(f"[Dataset] Taking file number: {file_number}")
@@ -361,7 +360,7 @@ class LoDoPaBDataset(Dataset):
             A_single = ts.operator(self.vg, proj_geom_single)
 
             # Extract only the sinogram at this specific angle
-            sinogram_angle = sinogram[:, angle_idx:angle_idx+1, :].to(self.device)
+            sinogram_angle = sinogram[:, angle_idx:angle_idx+1, :]
 
             # Back projection at single angle
             projection = A_single.T(sinogram_angle)
@@ -415,9 +414,9 @@ class LoDoPaBDataset(Dataset):
                                                                                 
         #Create single-back projections
         if self.single_bp:
-            single_back_projections = self._generate_single_backprojections(sinogram).to(self.device)
+            single_back_projections = self._generate_single_backprojections(sinogram)
             single_back_projections, _, _ =  self.minmax_normalize(single_back_projections)
-            single_back_projections = single_back_projections.to(self.device)
+            single_back_projections = single_back_projections
 
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
@@ -426,9 +425,9 @@ class LoDoPaBDataset(Dataset):
             'single_back_projections': single_back_projections}
         
         elif self.sparse_view:
-            sparse_sinogram = noisy_sinogram[:, self.indices, :].to(self.device)
+            sparse_sinogram = noisy_sinogram[:, self.indices, :]
             sparse_sinogram_normalise, _, _ = self.minmax_normalize(sparse_sinogram)
-            sparse_sinogram_normalise = sparse_sinogram_normalise.to(self.device)
+            sparse_sinogram_normalise = sparse_sinogram_normalise
 
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 

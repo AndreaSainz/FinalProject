@@ -1,7 +1,7 @@
 from ct_reconstruction.models.deep_back_projection import DBP
 from accelerate import Accelerator
 
-accelerator = Accelerator(fp16=True)
+accelerator = Accelerator()
 print(accelerator.state)
 
 # training, validation and testing paths

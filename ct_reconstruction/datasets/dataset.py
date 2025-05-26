@@ -259,7 +259,7 @@ class LoDoPaBDataset(Dataset):
         norm_sino, min_val, max_val =  self.minmax_normalize(sinogram)
 
         #Initilizing seed generator for reproducibility porpuses (this is for having more than one coworkers)
-        generator = torch.Generator(device=self.device).manual_seed(self.seed + idx)
+        generator = torch.Generator(device=sinogram.device).manual_seed(self.seed + idx)
 
         # Simulate measured photons using Poisson noise (counting error)
         measured_photons = torch.poisson(self.i_0 * torch.exp(-norm_sino), generator=generator)

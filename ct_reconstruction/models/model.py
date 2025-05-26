@@ -118,6 +118,7 @@ class ModelBase(Module):
         self.optimizer = None
         self.loss_fn = None
         self.scheduler = scheduler
+        self.indices = None
 
         # Create tomosipo volume and projection geometry
         self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen

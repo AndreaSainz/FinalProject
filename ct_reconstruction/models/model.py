@@ -86,19 +86,6 @@ class ModelBase(Module):
         self.num_detectors = 513        # 513 equidistant detector bins s spanning the image diameter.
         self.src_orig_dist = 575
         self.src_det_dist = 1050
-
-        # Create tomosipo volume and projection geometry
-        self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
-        self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
-        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
-        self.A = ts.operator(self.vg,self.pg)     
-
-        if self.sparse_view:
-            angles_sparse = np.linspace(0, np.pi, self.view_angles, endpoint=True)
-            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
-            self.A_sparse = ts.operator(self.vg, self.pg_sparse)
-            self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
-
                                                                               
         # dataset parameters
         self.model = None
@@ -130,6 +117,19 @@ class ModelBase(Module):
         self.optimizer = None
         self.loss_fn = None
         self.scheduler = scheduler
+
+        # Create tomosipo volume and projection geometry
+        self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
+        self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
+        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
+        self.A = ts.operator(self.vg,self.pg)     
+
+        if self.sparse_view:
+            self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
+            # so the angles match the subset that was taken from the original angles
+            angles_sparse = self.angles[self.indices] 
+            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
+            self.A_sparse = ts.operator(self.vg, self.pg_sparse)
 
         # accelerator for faster code
         self.accelerator = accelerator
@@ -213,7 +213,6 @@ class ModelBase(Module):
             self.single_bp,
             self.n_single_BP,
             self.sparse_view, 
-            self.view_angles,
             self.indices,
             self.alpha,
             self.i_0,
@@ -232,7 +231,6 @@ class ModelBase(Module):
             self.single_bp,
             self.n_single_BP, 
             self.sparse_view, 
-            self.view_angles,
             self.indices,
             self.alpha,  
             self.i_0, 
@@ -677,8 +675,7 @@ class ModelBase(Module):
         self.single_bp,
         self.n_single_BP, 
         self.sparse_view, 
-        self.view_angles,
-        self.indices
+        self.indices,
         self.alpha,  
         self.i_0, 
         self.sigma, 

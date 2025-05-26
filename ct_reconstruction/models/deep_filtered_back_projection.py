@@ -245,11 +245,12 @@ class DeepFBP(ModelBase):
         self.current_phase = None
 
         if self.sparse_view:
-            # Create tomosipo volume and projection geometry
-            self.vg_deepfbp = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
-            self.angles_deepfbp = np.linspace(0, np.pi, self.view_angles, endpoint=True)                                          # Angles
-            self.pg_deepfbp = ts.cone(angles = self.angles_deepfbp, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
-            self.A_deepfbp = ts.operator(self.vg_deepfbp,self.pg_deepfbp)
+            # Create tomosipo volume and projection geometry                                                  # Volumen
+            self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
+            # so the angles match the subset that was taken from the original angles
+            angles_sparse = self.angles[self.indices]                                          # Angles
+            self.pg_deepfbp = ts.cone(angles = angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
+            self.A_deepfbp = ts.operator(self.vg,self.pg_deepfbp)
             self.num_angles_deepfbp = self.view_angles
         else:
             self.A_deepfbp = self.A
@@ -337,7 +338,7 @@ class DeepFBP(ModelBase):
             "model_type": self.model_type,
             "model_path": self.model_path,
             "sparse-view": self.sparse_view,
-            "angle": self.view_angles,
+            "view_angles": self.view_angles,
             "filter_type" : self.filter_type,
             "current_phase" : self.current_phase,
             "accelerator" : str(self.accelerator.device),

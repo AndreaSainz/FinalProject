@@ -19,8 +19,8 @@ pg = ts.cone(angles = angles, src_orig_dist=src_orig_dist, shape=(1, num_detecto
 A = ts.operator(vg,pg)                                                                  # Operator
 
 # paths
-input_dir = "/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_train"
-output_dir = "/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_train"
+input_dir = "/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_validation"
+output_dir = "/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_validation"
 os.makedirs(output_dir, exist_ok=True)
 
 # extracting files .hdf5

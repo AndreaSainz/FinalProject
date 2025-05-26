@@ -78,7 +78,7 @@ class LoDoPaBDataset(Dataset):
     """
 
 
-    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, view_angles= 90, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
+    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
 
         if single_bp and sparse_view:
             ValueError("Sparse-view sinogram and single view backprojections are not compatible now, choose one of them")
@@ -93,7 +93,6 @@ class LoDoPaBDataset(Dataset):
         self.n_single_BP = int(n_single_BP)
         self.single_bp = single_bp
         self.sparse_view = sparse_view
-        self.view_angles = view_angles
         self.indices = indices
         self.alpha = alpha
         self.device= device

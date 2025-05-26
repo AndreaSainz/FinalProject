@@ -19,8 +19,8 @@ pg = ts.cone(angles = angles, src_orig_dist=src_orig_dist, shape=(1, num_detecto
 A = ts.operator(vg,pg)                                                                  # Operator
 
 # paths
-input_dir = "/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_validation"
-output_dir = "/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_validation"
+input_dir = "/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_train"
+output_dir = "/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_train"
 os.makedirs(output_dir, exist_ok=True)
 
 # extracting files .hdf5
@@ -31,11 +31,11 @@ for fname in tqdm(files, desc="file processing"):
     input_path = os.path.join(input_dir, fname)
     output_path = os.path.join(output_dir, fname) 
 
-    # Saltar si ya existe en carpeta de salida con sinogramas
+    # Skip if already exists in output folder with synograms
     if os.path.exists(output_path):
         with h5py.File(output_path, "r") as f_out:
             if "sinograms" in f_out:
-                print(f"[SKIP] {fname} ya tiene sinogramas en output_dir.")
+                print(f"[SKIP] {fname} has sinograms in output_dir.")
                 continue
 
     with h5py.File(input_path, "r") as f_in:
@@ -48,7 +48,7 @@ for fname in tqdm(files, desc="file processing"):
         sino = A(img_tensor).squeeze(0).cpu().numpy()
         sinograms[i] = sino
 
-    # Guardar nuevo archivo con ambos datasets
+    # Save new file with both datasets
     with h5py.File(output_path, "w") as f_out:
         f_out.create_dataset("data", data=imgs, compression="gzip")
         f_out.create_dataset("sinograms", data=sinograms, compression="gzip")

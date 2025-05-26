@@ -21,6 +21,7 @@ import gc
 import pandas as pd
 
 
+
 class ModelBase(Module):
     """
     Abstract base class for CT reconstruction training, evaluation, and analysis.
@@ -168,7 +169,6 @@ class ModelBase(Module):
         torch.backends.cudnn.benchmark = False
     
 
-
     def _log(self, msg, level='info'):
         """
         Logs a message with the specified severity level.
@@ -248,17 +248,17 @@ class ModelBase(Module):
             train_data,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=4,
+            num_workers=0,
             pin_memory=True,
             generator=g,
-            worker_init_fn=lambda _: np.random.seed(self.seed)
+            worker_init_fn= lambda _: np.random.seed(self.seed)
         )
 
         val_dataloader = DataLoader(
             val_data,
             batch_size=self.batch_size,
             shuffle=False, # validation and test do not need shuffle
-            num_workers=4,
+            num_workers=0,
             pin_memory=True
         ) 
 
@@ -688,8 +688,8 @@ class ModelBase(Module):
         test_dataloader = DataLoader(test_data, 
         batch_size=self.batch_size, 
         shuffle=False, 
-        num_workers=4,
-        pin_memory=True,
+        num_workers=0,
+        pin_memory=True
         ) 
 
         return test_dataloader

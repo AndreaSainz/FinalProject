@@ -40,6 +40,9 @@ model_deepfbp = DeepFBP(model_path, filter_type, sparse_view, view_angles, alpha
 # training and validation
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience) #phase 1(only filter)
 
+
+model_deepfbp.test(test_path, max_len_test)
+
 print(f"DeepFBP using sparse-view: {model_deepfbp.sparse_view}")
 print(f"Number of angles used: {model_deepfbp.num_angles_deepfbp}")
 

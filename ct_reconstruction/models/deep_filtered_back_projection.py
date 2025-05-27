@@ -5,6 +5,7 @@ from ..models.model import ModelBase
 import json
 import tomosipo as ts
 import numpy as np
+import matplotlib.pyplot as plt
 
 class DeepFBPNetwork(Module):
     """
@@ -153,9 +154,20 @@ class DeepFBPNetwork(Module):
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
 
+        plt.imshow(x[0].detach().cpu().numpy(), cmap="gray", aspect='auto')
+        plt.title("Sinograma antes del filtrado")
+        plt.colorbar()
+        plt.show()
+
         # Apply filter for frequency domain
         x = self.learnable_filter(x)
         x = x.squeeze(1)
+
+        
+        plt.imshow(x[0].detach().cpu().numpy(), cmap="gray", aspect='auto')
+        plt.title("Sinograma recien Filtrado")
+        plt.colorbar()
+        plt.show()
 
         # Apply "interpolator", is changing the values of the sinogram directly, is more like a denoiser
         x = x + self.interpolator_1(x)
@@ -165,9 +177,19 @@ class DeepFBPNetwork(Module):
 
         x = x.unsqueeze(1)               # [B, 1, A, D]
 
+        plt.imshow(x[0].detach().cpu().numpy(), cmap="gray", aspect='auto')
+        plt.title("Sinograma antes de tomosipo")
+        plt.colorbar()
+        plt.show()
+
         # A.T() only accepts [1, A, D] so we iterate by batch
         images = [DifferentiableBackprojection.apply(xi, self.A_modulo) for xi in x]  
         image = torch.stack(images, dim=0) 
+
+        plt.imshow(image[0, 0].detach().cpu().numpy(), cmap="gray")
+        plt.title("Imagen Reconstruida (Backprojection)")
+        plt.colorbar()
+        plt.show()
 
         # apply denoiser to the output image
         x = self.denoising_conv_1(image)

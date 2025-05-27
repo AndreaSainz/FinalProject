@@ -378,7 +378,7 @@ class ModelBase(Module):
             opt.zero_grad()
             self.accelerator.backward(loss_value)
             opt.step()
-            for name, param in self.model.model.named_parameters():
+            for name, param in self.model.named_parameters():
                 if param.requires_grad:
                     print(f"{name} grad: {param.grad is not None}")
 

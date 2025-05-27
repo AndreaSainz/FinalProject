@@ -297,7 +297,7 @@ class LoDoPaBDataset(Dataset):
             idx (int): Global index across all available slices.
 
         Returns:
-            torch.Tensor: Image tensor of shape (1, H, W), normalized to [0, alpha].
+            torch.Tensor: Image tensor of shape (1, H, W).
 
         Raises:
             ValueError: If no HDF5 files are found during dataset initialization.
@@ -315,12 +315,12 @@ class LoDoPaBDataset(Dataset):
         # Read the HDF5 file
         if file_path.startswith("gs://"):
             with h5py.File(self.fs.open(file_path, 'rb')) as f:
-                ground_truth = f['data'][local_idx]
-                sino = f['sinograms'][local_idx]
+                ground_truth = f['data'][local_idx] /self.alpha
+                sino = f['sinograms'][local_idx]/self.alpha
         else:
             with h5py.File(file_path, 'r') as f:
-                ground_truth = f['data'][local_idx]
-                sino = f['sinograms'][local_idx]
+                ground_truth = f['data'][local_idx]/self.alpha
+                sino = f['sinograms'][local_idx]/self.alpha
 
                 
 
@@ -399,44 +399,26 @@ class LoDoPaBDataset(Dataset):
 
         # Get image
         sample_slice, sinogram = self._get_image_from_file(idx)
-
-        #normalise the image into a physical interval
-        sample_slice = sample_slice / sample_slice.max()  
-        sample_slice = sample_slice * self.alpha
     
         # Add nose to sinogram
         noisy_sinogram = self.noise(sinogram, idx)
-
-
-        # Normalise noisy sinogram for training porpuses
-        noisy_sinogram_normalise, _, _ =  self.minmax_normalize(noisy_sinogram)
-
                                                                                 
         #Create single-back projections
         if self.single_bp:
             single_back_projections = self._generate_single_backprojections(sinogram)
-            single_back_projections, _, _ =  self.minmax_normalize(single_back_projections)
-            single_back_projections = single_back_projections
-
+            sinogram_sparse = noisy_sinogram[:, self.angles_SBP, :] 
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
-            'noisy_sinogram':noisy_sinogram, 
-            'noisy_sinogram_normalise':noisy_sinogram_normalise,
+            'sinogram_sparse': sinogram_sparse, 
             'single_back_projections': single_back_projections}
         
         elif self.sparse_view:
             sparse_sinogram = noisy_sinogram[:, self.indices, :]
-            sparse_sinogram_normalise, _, _ = self.minmax_normalize(sparse_sinogram)
-            sparse_sinogram_normalise = sparse_sinogram_normalise
-
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
             'noisy_sinogram': noisy_sinogram, 
-            'noisy_sinogram_normalise':noisy_sinogram_normalise,
-            'sparse_sinogram': sparse_sinogram,
-            'sparse_sinogram_normalise': sparse_sinogram_normalise}
+            'sparse_sinogram': sparse_sinogram}
 
         return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
-            'noisy_sinogram': noisy_sinogram,
-            'noisy_sinogram_normalise': noisy_sinogram_normalise}
+            'noisy_sinogram': noisy_sinogram,}

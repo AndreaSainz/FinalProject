@@ -4,8 +4,9 @@ from torch.nn import Conv1d, Conv2d, BatchNorm1d, Sequential, PReLU, ReLU, Param
 from ..models.model import ModelBase
 import json
 import tomosipo as ts
-import numpy as np
+
 import matplotlib.pyplot as plt
+from tomosipo.torch_support import (to_autograd)
 
 class DeepFBPNetwork(Module):
     """
@@ -44,6 +45,7 @@ class DeepFBPNetwork(Module):
         self.num_angles_modulo = num_angles
         self.A_modulo = A
         self.filter_type = filter_type
+        self.AT = to_autograd(self.A_modulo.T, is_2d=True, num_extra_dims=2)
 
         # initilize filter as ram-lak filter
         ram_lak = self.ram_lak_filter()
@@ -183,16 +185,15 @@ class DeepFBPNetwork(Module):
         plt.show()
 
         # A.T() only accepts [1, A, D] so we iterate by batch
-        images = [DifferentiableBackprojection.apply(xi, self.A_modulo) for xi in x]  
-        image = torch.stack(images, dim=0) 
+        images = self.AT(x)  
 
-        plt.imshow(image[0, 0].detach().cpu().numpy(), cmap="gray")
+        plt.imshow(images[0, 0].detach().cpu().numpy(), cmap="gray")
         plt.title("Imagen Reconstruida (Backprojection)")
         plt.colorbar()
         plt.show()
 
         # apply denoiser to the output image
-        x = self.denoising_conv_1(image)
+        x = self.denoising_conv_1(images)
         x = x + self.denoising_res_1(x)
         x = x + self.denoising_res_2(x)
         x = x + self.denoising_res_3(x)
@@ -267,7 +268,7 @@ class DeepFBP(ModelBase):
         self.current_phase = None
 
         if self.sparse_view:
-            # Create tomosipo volume and projection geometry                                                  # Volumen
+            # Create tomosipo volume and projection geometry                                                  #
             self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
             # so the angles match the subset that was taken from the original angles
             angles_sparse = self.angles[self.indices]                                          # Angles
@@ -440,37 +441,3 @@ class LearnableFilter(Module):
         
         # retorn the filtered sinogram 
         return torch.fft.ifft(filtered, dim=-1).real
-
-
-class DifferentiableBackprojection(torch.autograd.Function):
-    """
-    Differentiable wrapper for the backprojection operator.
-
-    Enables gradient flow through custom CT backprojection routines using PyTorch's autograd.
-
-    Methods:
-        forward(x, operator): Applies backprojection using `operator.T(x)`.
-        backward(grad_output): Applies forward projection using `operator(grad_output)`.
-
-    Args:
-        x (torch.Tensor): Input tensor of shape (1, A, D).
-        operator (callable): Custom linear operator (e.g., TomoSipo Radon transform).
-
-    Returns:
-        torch.Tensor: Reconstructed image.
-
-    Example:
-        >>> image = DifferentiableBackprojection.apply(sinogram, A)
-    """
-    @staticmethod
-    def forward(ctx, x, operator):
-        ctx.operator = operator
-        ctx.save_for_backward(x)
-        return operator.T(x)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        x, = ctx.saved_tensors
-        # We assume that the gradient of A.T is simply A
-        grad_input = ctx.operator(grad_output)
-        return grad_input, None  # second arg is for `operator`, which has no gradient

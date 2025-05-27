@@ -363,9 +363,9 @@ class ModelBase(Module):
             if self.single_bp:
                 input_data = batch["single_back_projections"]
             elif self.sparse_view:
-                input_data = batch["sparse_sinogram_normalise"]
+                input_data = batch["sparse_sinogram"]
             else:
-                input_data = batch["noisy_sinogram_normalise"]
+                input_data = batch["noisy_sinogram"]
 
             # perform a forward pass and calculate the training loss
             pred = self.model(input_data)
@@ -448,9 +448,9 @@ class ModelBase(Module):
                 if self.single_bp:
                     input_data = batch["single_back_projections"]
                 elif self.sparse_view:
-                    input_data = batch["sparse_sinogram_normalise"]
+                    input_data = batch["sparse_sinogram"]
                 else:
-                    input_data = batch["noisy_sinogram_normalise"]
+                    input_data = batch["noisy_sinogram"]
                 
                 # make the predictions and calculate the validation loss
                 pred = self.model(input_data)
@@ -530,9 +530,9 @@ class ModelBase(Module):
         if self.single_bp:
             sample = next(iter(train_dataloader))["single_back_projections"]  # single_back_projections
         elif self.sparse_view:
-            sample = next(iter(train_dataloader))["sparse_sinogram_normalise"]
+            sample = next(iter(train_dataloader))["sparse_sinogram"]
         else:
-            sample = next(iter(train_dataloader))["noisy_sinogram_normalise"]
+            sample = next(iter(train_dataloader))["noisy_sinogram"]
         summary(self.model, input_size=tuple(sample.shape[1:]))
 
         # confirmation for the model to be train 
@@ -560,9 +560,9 @@ class ModelBase(Module):
             if self.single_bp:
                 fixed_input = fixed_batch["single_back_projections"] 
             elif self.sparse_view:
-                fixed_input = fixed_batch["sparse_sinogram_normalise"] 
+                fixed_input = fixed_batch["sparse_sinogram"] 
             else:
-                fixed_input = fixed_batch["noisy_sinogram_normalise"]
+                fixed_input = fixed_batch["noisy_sinogram"]
 
             fixed_gt = fixed_batch["ground_truth"]
 
@@ -742,13 +742,13 @@ class ModelBase(Module):
 
                 if self.single_bp:
                     input_data = batch["single_back_projections"]
-                    noisy_sino = batch['sinogram']
+                    noisy_sino = batch['sinogram_sparse']
                 elif self.sparse_view:
-                    input_data = batch["sparse_sinogram_normalise"]
-                    noisy_sino = batch["sparse_sinogram"]
+                    input_data = batch["sparse_sinogram"]
+                    noisy_sino = input_data
                 else:
-                    input_data = batch["noisy_sinogram_normalise"]
-                    noisy_sino = batch['noisy_sinogram']
+                    input_data = batch["noisy_sinogram"]
+                    noisy_sino = input_data
 
                 
 

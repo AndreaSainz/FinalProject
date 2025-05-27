@@ -103,6 +103,7 @@ class ModelBase(Module):
         self.max_len_train = None
         self.max_len_val = None
         self.max_len_test = None
+        self.offset = 0
 
         # model parameters
         self.model_path = model_path
@@ -143,8 +144,6 @@ class ModelBase(Module):
         
         # set the device once for the whole class
         self.device = self.accelerator.device
-
-        
 
 
     def _set_seed(self):
@@ -214,6 +213,7 @@ class ModelBase(Module):
             self.single_bp,
             self.n_single_BP,
             self.sparse_view, 
+            self.offset,
             self.indices,
             self.alpha,
             self.i_0,
@@ -232,6 +232,7 @@ class ModelBase(Module):
             self.single_bp,
             self.n_single_BP, 
             self.sparse_view, 
+            self.offset,
             self.indices,
             self.alpha,  
             self.i_0, 
@@ -679,6 +680,7 @@ class ModelBase(Module):
         self.single_bp,
         self.n_single_BP, 
         self.sparse_view, 
+        self.offset, 
         self.indices,
         self.alpha,  
         self.i_0, 
@@ -722,7 +724,7 @@ class ModelBase(Module):
         # save ground truth and predictions
         gt_images = []
         predictions = []
-        noisy_sinograms = []
+        sinograms = []
 
         # switch off autograd for evaluation
         with torch.no_grad():
@@ -742,13 +744,13 @@ class ModelBase(Module):
 
                 if self.single_bp:
                     input_data = batch["single_back_projections"]
-                    noisy_sino = batch['sinogram_sparse']
+                    sino = batch['sparse_sinogram']
                 elif self.sparse_view:
                     input_data = batch["sparse_sinogram"]
-                    noisy_sino = input_data
+                    sino = input_data
                 else:
                     input_data = batch["noisy_sinogram"]
-                    noisy_sino = input_data
+                    sino = input_data
 
                 
 
@@ -772,7 +774,7 @@ class ModelBase(Module):
                 # save gound truth and prediction
                 predictions.append(pred.cpu())
                 gt_images.append(ground_truth.cpu())
-                noisy_sinograms.append(noisy_sino.cpu())
+                sinograms.append(sino.cpu())
 
                 #Clean memory
                 if batch_id == 10:
@@ -785,10 +787,10 @@ class ModelBase(Module):
                     elif torch.backends.mps.is_available():
                         torch.mps.empty_cache()
         
-        return predictions, gt_images, noisy_sinograms, total_test_loss, total_psnr, total_ssim
+        return predictions, gt_images, sinograms, total_test_loss, total_psnr, total_ssim
 
 
-    def test(self, test_path, max_len_test=None):
+    def test(self, test_path, max_len_test=None, offset = 0, indices = None):
         """
         Tests the trained model on a separate dataset.
 
@@ -805,6 +807,10 @@ class ModelBase(Module):
         Example:
             >>> results = model.test("data/test")
         """
+        if self.single_bp and offset != 0 :
+            self.offset = offset
+        elif self.sparse_view and indices != None:
+            self.indices = indices
 
         #changing paths parameters
         self.test_path = test_path
@@ -832,10 +838,8 @@ class ModelBase(Module):
         self.model, loss, test_dataloader = self.accelerator.prepare(self.model, self.loss_fn, test_dataloader)
 
         # call evaliation function
-        if self.sparse_view:
-            predictions, gt_images, sparse_sinograms, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)
-        else:
-            predictions, gt_images, noisy_sinograms, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)
+        predictions, gt_images, sinograms, total_test_loss, total_psnr, total_ssim = self.evaluate(test_dataloader, loss, mse_fn)
+        
         
     
         # training history
@@ -855,11 +859,11 @@ class ModelBase(Module):
         torch.save(torch.cat(gt_images), f"{self.model_path}_ground_truth_images.pt")
         self._log(f"Predictions saved to {self.model_path}_predictions_images.pt")
         self._log(f"Ground Truth images saved to {self.model_path}_ground_truth_images.pt")
-        if self.sparse_view:
-            torch.save(torch.cat(sparse_sinograms), f"{self.model_path}_sparse_sinograms.pt")
+        if self.sparse_view or self.single_bp:
+            torch.save(torch.cat(sinograms), f"{self.model_path}_sparse_sinograms.pt")
             self._log(f"Sparse-view sinograms saved to {self.model_path}_sparse_sinograms.pt")
         else : 
-            torch.save(torch.cat(noisy_sinograms), f"{self.model_path}_noisy_sinograms.pt")
+            torch.save(torch.cat(sinograms), f"{self.model_path}_noisy_sinograms.pt")
             self._log(f"Noisy sinograms saved to {self.model_path}_noisy_sinograms.pt")
 
         # save metrics to file
@@ -1093,12 +1097,12 @@ class ModelBase(Module):
         elif not self.sparse_view and not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
             self._log("Noisy sinograms .pt files not found", level="error")
             return
-        elif self.sparse_view and not os.path.exists(f"{self.model_path}_sparse_sinograms.pt"):
+        elif (self.sparse_view or self.single_bp) and not os.path.exists(f"{self.model_path}_sparse_sinograms.pt"):
             self._log("Sparse-view sinograms .pt files not found", level="error")
         else:
             predictions = torch.load(f"{self.model_path}_predictions_images.pt")
             ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
-            if self.sparse_view:
+            if self.sparse_view or self.single_bp:
                 sinograms = torch.load(f"{self.model_path}_sparse_sinograms.pt") 
             else:
                 sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
@@ -1162,10 +1166,10 @@ class ModelBase(Module):
             for batch in tqdm(test_dataloader):
                 # send the input to the device
                 ground_truth = batch['ground_truth']
-                if self.sparse_view:
-                    sino = batch['noisy_sinogram']
-                else:
+                if self.sparse_view or self.single_bp:
                     sino = batch['sparse_sinogram']
+                else:
+                    sino = batch['noisy_sinogram']
 
                 recon_dict = self.other_ct_reconstruction(
                 sino,

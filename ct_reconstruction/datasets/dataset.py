@@ -78,7 +78,7 @@ class LoDoPaBDataset(Dataset):
     """
 
 
-    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
+    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, offset = 0, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
 
         if single_bp and sparse_view:
             ValueError("Sparse-view sinogram and single view backprojections are not compatible now, choose one of them")
@@ -96,6 +96,7 @@ class LoDoPaBDataset(Dataset):
         self.indices = indices
         self.alpha = alpha
         self.device= device
+        self.offset = offset
         
 
         # Noise parameter  
@@ -120,8 +121,7 @@ class LoDoPaBDataset(Dataset):
 
 
         # Select subset of angles for sparse-view backprojection
-        self.angles_SBP = np.linspace(0, len(self.angles) - 1, self.n_single_BP, dtype=int)
-
+        self.angles_SBP = np.linspace(0, len(self.angles) - 1, self.n_single_BP, dtype=int) + offset*np.ones(self.n_single_BP)
 
         # Prepare list of data files
         self.ground_truth_dir = ground_truth_dir
@@ -409,7 +409,7 @@ class LoDoPaBDataset(Dataset):
             sinogram_sparse = noisy_sinogram[:, self.angles_SBP, :] 
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
-            'sinogram_sparse': sinogram_sparse, 
+            'sparse_sinogram': sinogram_sparse, 
             'single_back_projections': single_back_projections}
         
         elif self.sparse_view:

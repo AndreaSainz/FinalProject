@@ -378,6 +378,9 @@ class ModelBase(Module):
             opt.zero_grad()
             self.accelerator.backward(loss_value)
             opt.step()
+            for name, param in self.model.model.named_parameters():
+                if param.requires_grad:
+                    print(f"{name} grad: {param.grad is not None}")
 
 
             # add the loss to the total training loss so far

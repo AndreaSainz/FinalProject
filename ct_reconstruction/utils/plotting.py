@@ -155,3 +155,40 @@ def plot_different_reconstructions(model_type, sample, recon_dict, output_img, g
         plt.tight_layout()
         plt.savefig(f"{save_path}_{sample}_{key}.png")
         plt.close()
+
+
+def plot_learned_filter(weights: torch.Tensor, title="(a) Filter I", save_path="filter_plot.png"):
+    """
+    Grafica el filtro aprendido en el dominio de la frecuencia con simetría centrada en cero.
+
+    Args:
+        weights (torch.Tensor): Tensor del filtro de forma (D,) o (1, D).
+        title (str): Título de la gráfica.
+    """
+
+    # Asegurarse de que el tensor es 1D
+    if weights.ndim > 1:
+        weights = weights.squeeze()
+        
+    weights = weights.detach()
+
+    # Generar eje de frecuencia simétrico
+    D = len(weights)
+    freqs = torch.fft.fftshift(torch.fft.fftfreq(D))
+    filter_shifted = torch.fft.fftshift(weights)
+
+    # Convertir a NumPy para graficar
+    freqs_np = freqs.cpu().numpy()
+    filter_np = filter_shifted.cpu().numpy()
+
+    # Graficar y guardar
+    plt.figure(figsize=(6, 4))
+    plt.fill_between(freqs_np, 0, filter_np, color="steelblue")
+    plt.xlabel("frequency")
+    plt.ylabel("amplitude")
+    plt.title(title)
+    plt.ylim(0, 1.0)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()  # Cerrar para evitar mostrarla en notebooks

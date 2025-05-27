@@ -412,9 +412,9 @@ class LearnableFilter(Module):
 
         # apply de filter
         if self.per_angle:
-            filtered = ftt1d_shifted * self.weights.unsqueeze(0)
+            filtered = ftt1d_shifted * self.weights[None, :, :]
         else:
-            filtered = ftt1d_shifted * self.weights
+            filtered = ftt1d_shifted * self.weights[None, None, :]
         
         # retorn the filtered sinogram 
         return torch.fft.ifft(filtered, dim=-1).real

@@ -1006,6 +1006,7 @@ class ModelBase(Module):
 
     def _get_operator(self):
         return self.A_sparse if self.sparse_view else self.A
+    
 
     def other_ct_reconstruction(self, sinogram, A, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
         """

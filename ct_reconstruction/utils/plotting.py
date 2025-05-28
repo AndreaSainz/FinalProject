@@ -40,9 +40,9 @@ def show_example(output_img, ground_truth):
 
     # creating one figure with two imagenes
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-    axes[0].imshow(output_img.squeeze().cpu(), cmap='gray')
+    axes[0].imshow(output_img.squeeze().cpu(), cmap='gray', vmin=0, vmax=1)
     axes[0].set_title('Reconstruction')
-    axes[1].imshow(ground_truth.squeeze().cpu(), cmap='gray')
+    axes[1].imshow(ground_truth.squeeze().cpu(), cmap='gray', vmin=0, vmax=1)
     axes[1].set_title('Ground Truth')
     plt.tight_layout()
     plt.show()
@@ -62,9 +62,9 @@ def show_example_epoch(output_img, ground_truth, epoch, save_path=None):
     """
     # creating one figure with two images
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-    axes[0].imshow(output_img.squeeze().detach().cpu(), cmap='gray')
+    axes[0].imshow(output_img.squeeze().detach().cpu(), cmap='gray', vmin=0, vmax=1)
     axes[0].set_title(f"Reconstructed image in epoch {epoch}")
-    axes[1].imshow(ground_truth.squeeze().detach().cpu(), cmap='gray')
+    axes[1].imshow(ground_truth.squeeze().detach().cpu(), cmap='gray', vmin=0, vmax=1)
     axes[1].set_title(f"Ground Truth in epoch {epoch}")
     plt.tight_layout()
     
@@ -133,7 +133,7 @@ def plot_different_reconstructions(model_type, sample, recon_dict, output_img, g
 
     #model reconstructed image
     plt.figure()
-    plt.imshow(output_img.squeeze().cpu(), cmap='gray')
+    plt.imshow(output_img.squeeze().cpu(), cmap='gray', vmin=0, vmax=1)
     plt.title(f"Reconstructed Image with {model_type} model")
     plt.tight_layout()
     plt.savefig(f"{save_path}_{sample}_model_prediction.png")
@@ -141,7 +141,7 @@ def plot_different_reconstructions(model_type, sample, recon_dict, output_img, g
 
     # ground truth image
     plt.figure()
-    plt.imshow(ground_truth.squeeze().cpu(), cmap='gray')
+    plt.imshow(ground_truth.squeeze().cpu(), cmap='gray', vmin=0, vmax=1)
     plt.title(f"Ground Truth Image")
     plt.tight_layout()
     plt.savefig(f"{save_path}_{sample}_ground_truth.png")
@@ -150,7 +150,7 @@ def plot_different_reconstructions(model_type, sample, recon_dict, output_img, g
     # other reconstructed ct images (classical methods)
     for key in recon_dict:
         plt.figure()
-        plt.imshow(recon_dict[key].squeeze().cpu(), cmap='gray')
+        plt.imshow(recon_dict[key].squeeze().cpu(), cmap='gray', vmin=0, vmax=1)
         plt.title(f"Reconstructed Image with {key} algorithm")
         plt.tight_layout()
         plt.savefig(f"{save_path}_{sample}_{key}.png")

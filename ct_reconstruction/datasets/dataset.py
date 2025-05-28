@@ -202,7 +202,7 @@ class LoDoPaBDataset(Dataset):
     
 
 
-    def minmax_normalize(self, tensor):
+    def max_normalize(self, tensor):
         """
         Normalizes a tensor to the range [0, 1] using min-max scaling.
 
@@ -215,17 +215,16 @@ class LoDoPaBDataset(Dataset):
                 - min_val (float): Minimum value of the original tensor.
                 - max_val (float): Maximum value of the original tensor.
         """
-        # calculatin min and max from tensor
-        min_val = tensor.min()
+        # calculatin max from tensor
         max_val = tensor.max()
 
         #Normalising
-        norm = (tensor - min_val) / (max_val - min_val)
-        return norm, min_val, max_val
+        norm = tensor  / max_val 
+        return norm, max_val
     
 
 
-    def minmax_denormalize(self, norm_tensor, min_val, max_val):
+    def max_denormalize(self, norm_tensor, max_val):
         """
         Reverses min-max normalization using provided min and max values.
 
@@ -237,7 +236,7 @@ class LoDoPaBDataset(Dataset):
         Returns:
             torch.Tensor: Denormalized tensor in original scale.
         """
-        return norm_tensor * (max_val - min_val) + min_val
+        return norm_tensor * max_val  
     
 
         
@@ -256,7 +255,7 @@ class LoDoPaBDataset(Dataset):
             - Gaussian noise represents detector/system imperfections.
         """
         # Nomalised sinogram between [0,1] to add noise
-        norm_sino, min_val, max_val =  self.minmax_normalize(sinogram)
+        norm_sino,  max_val =  self.max_normalize(sinogram)
 
         #Initilizing seed generator for reproducibility porpuses (this is for having more than one coworkers)
         generator = torch.Generator(device=sinogram.device).manual_seed(self.seed + idx)
@@ -278,7 +277,7 @@ class LoDoPaBDataset(Dataset):
         noisy_sinogram += gaussian_noise
 
         # reaply the normalization
-        noisy_sinogram = self.minmax_denormalize(noisy_sinogram, min_val, max_val)
+        noisy_sinogram = self.max_denormalize(noisy_sinogram, max_val)
 
         # no negative 
         noisy_sinogram = torch.clamp(noisy_sinogram, min=0)

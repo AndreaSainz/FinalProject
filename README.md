@@ -166,15 +166,13 @@ Download the following files:
 - `ground_truth_train.zip`
 - `ground_truth_validation.zip`
 - `ground_truth_test.zip`
-- `observation_train.zip`
-- `observation_validation.zip`
-- `observation_test.zip`
 
 ### Unzip and Organize
 
 1. Unzip all three files.
 2. Create a folder named `data` in the root of the project (if it does not already exist).
-3. Move the extracted folders  into the `data/` directory.
+3. Move the extracted folders into the `data/` directory.
+
 
 The structure should look like:
 
@@ -189,16 +187,21 @@ project_root/
 │   └── observation_test/
 ```
 
-### Data Processing
+## Data Processing
 
-To enable faster and more consistent data loading during training and evaluation, we recommend preprocessing the dataset using two scripts: `extract_sinograms_gt.py` and `extract_sinograms_low_dose.py`.
+To prepare the data for training and evaluation, you need to simulate both full-dose and low-dose sinograms from the ground truth CT images.
 
-These scripts prepare the data by pairing each ground truth image with its corresponding sinogram, and organizing the results in a more efficient format for downstream use:
+This is done using the script `sinograms_simulation.py`, which performs the following steps:
 
-- `extract_sinograms_gt.py`: Takes the ground truth images and computes the corresponding full-dose sinograms (i.e., simulated sinograms with normal radiation levels). It saves both the ground truth image and its sinogram in the output.
-- `extract_sinograms_low_dose.py`: Takes the ground truth images and the low-dose observation sinograms, combining them into a single file that includes the ground truth image and the associated low-dose sinogram.
+1. **Upsampling**: The ground truth images are upsampled from 362×362 to 1000×1000 pixels using bilinear interpolation. This is done to avoid the *inverse crime* during forward projection.
+2. **Projection**: The upsampled images are projected using the tomosipo **fan-beam geometry** (via `ts.cone`) to compute the clean sinogram. Although the operator is called `ts.cone`, in 2D it corresponds to a fan-beam setup, as used in clinical CT.
+3. **Saving**: Two outputs are generated and saved for each image:
+   - A **full-dose version**, which directly uses the clean sinogram.
+   - A **low-dose version**, created by simulating realistic Poisson noise with a reduced photon count (`N₀ = 4096`), followed by normalization using a maximum attenuation coefficient (`μ_max = 81.35858`, ensuring that CT images lie in the [0, 1] range), and finally applying the Beer–Lambert transform.
 
-Each script should be executed **three times**, once for each of the dataset splits (`train`, `validation`, `test`). You need to specify the input directories (from `data/ground_truth_*` and `data/observation_*`) and the output directory, which should be set to `data_sino`.
+Each image and its corresponding sinogram (either full-dose or low-dose) is saved in a `.hdf5` file under separate output folders.
+
+Run `sinogram_simulation.py` once for each dataset split (`train`, `validation`, `test`). The results will be stored under `data_sino/`.
 
 After processing, the `data_sino/` directory should have the following structure:
 ```
@@ -211,14 +214,13 @@ project_root/
 │   ├── observation_validation/
 │   └── observation_test/
 ```
-Each folder contains processed files in a standardized format:
+Each HDF5 file contains:
+- `data`: the original CT image (362×362)
+- `sinograms`: the simulated sinogram (either full-dose or low-dose)
 
-- Files in the `ground_truth_*` directories contain a full-dose sinogram and the corresponding ground truth image.
-- Files in the `observation_*` directories contain a low-dose sinogram and the corresponding ground truth image.
+This format ensures consistent pairing between ground truth images and sinograms, and accelerates data loading during training.
 
-This format ensures consistent pairing and accelerates data loading in your training pipeline.
-
-Note: this hole process should not take more than 2 hours to be completed. The data loader class expect the file to contain an image and the sinogram.
+> **Note:** The full simulation process should take under 2 hours on GPU, depending on your hardware and parallelization.
 
 ## License
 

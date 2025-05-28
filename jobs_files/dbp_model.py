@@ -12,16 +12,16 @@ test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground
 
 # define parameters
 n_single_BP = 16
-alpha = 1
+alpha = 0.297807 #percentile 95
 i_0 = 100000
 sigma = 0.001
-max_len_train = 10000
-max_len_val = 2000
-max_len_test = 2000
+max_len_train = 100
+max_len_val = 20
+max_len_test = 20
 seed = 29072000
 debug = True
 batch_size = 32
-epochs = 40
+epochs = 5
 learning_rate = 1e-3
 scheduler = True
 patience = 10

@@ -156,7 +156,7 @@ class DeepFBPNetwork(Module):
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
 
-        plt.imshow(x[0].detach().cpu().numpy(), cmap="gray", aspect='auto')
+        plt.imshow(x[0,0].detach().cpu().numpy(), cmap="gray", aspect='auto')
         plt.title("Sinograma antes del filtrado")
         plt.colorbar()
         plt.show()
@@ -166,7 +166,7 @@ class DeepFBPNetwork(Module):
         x = x.squeeze(1)
 
         
-        plt.imshow(x[0].detach().cpu().numpy(), cmap="gray", aspect='auto')
+        plt.imshow(x[0,0].detach().cpu().numpy(), cmap="gray", aspect='auto')
         plt.title("Sinograma recien Filtrado")
         plt.colorbar()
         plt.show()
@@ -179,7 +179,7 @@ class DeepFBPNetwork(Module):
 
         x = x.unsqueeze(1)               # [B, 1, A, D]
 
-        plt.imshow(x[0].detach().cpu().numpy(), cmap="gray", aspect='auto')
+        plt.imshow(x[0,0].detach().cpu().numpy(), cmap="gray", aspect='auto')
         plt.title("Sinograma antes de tomosipo")
         plt.colorbar()
         plt.show()

@@ -267,20 +267,35 @@ class DeepFBP(ModelBase):
         
         self.current_phase = None
 
-        if self.sparse_view:
-            # Create tomosipo volume and projection geometry                                                  #
-            self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
-            # so the angles match the subset that was taken from the original angles
-            angles_sparse = self.angles[self.indices]                                          # Angles
-            self.pg_deepfbp = ts.cone(angles = angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
-            self.A_deepfbp = ts.operator(self.vg,self.pg_deepfbp)
-            self.num_angles_deepfbp = self.view_angles
-        else:
-            self.A_deepfbp = self.A
-            self.num_angles_deepfbp = self.num_angles
+        self.A_deepfbp, self.pg_deepfbp, self.num_angles_deepfbp = self._build_projection_operator()
 
 
         self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type)
+
+    def _build_projection_operator(self):
+        """
+        Builds the appropriate tomosipo projection operator depending on whether
+        sparse-view mode is enabled.
+
+        Returns:
+            A (ts.Operator): Tomosipo forward operator
+            pg (ts.ProjectionGeometry): Corresponding projection geometry
+            num_angles (int): Number of angles used
+        """
+        if self.sparse_view:
+            self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
+            angles_sparse = self.angles[self.indices]
+            pg = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
+            A = ts.operator(self.vg, pg)
+            num_angles = self.view_angles
+            self._log(f"[Geometry] Using sparse-view geometry with {num_angles} angles.")
+        else:
+            pg = self.pg
+            A = self.A
+            num_angles = self.num_angles
+            self._log(f"[Geometry] Using full-view geometry with {num_angles} angles.")
+        
+        return A, pg, num_angles
 
     def set_training_phase(self, phase):
         """
@@ -441,3 +456,4 @@ class LearnableFilter(Module):
         
         # retorn the filtered sinogram 
         return torch.fft.ifft(filtered, dim=-1).real
+    

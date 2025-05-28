@@ -128,9 +128,16 @@ class ModelBase(Module):
         self.A = ts.operator(self.vg,self.pg)     
 
         if self.sparse_view:
-            self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
+            self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
             # so the angles match the subset that was taken from the original angles
-            angles_sparse = self.angles[self.indices] 
+            angles_sparse = self.angles[self.indices_base] 
+            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
+            self.A_sparse = ts.operator(self.vg, self.pg_sparse)
+
+        elif self.single_bp:
+            self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.n_single_BP).long()
+            # so the angles match the subset that was taken from the original angles
+            angles_sparse = self.angles[self.indices_base] 
             self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
             self.A_sparse = ts.operator(self.vg, self.pg_sparse)
 
@@ -144,6 +151,12 @@ class ModelBase(Module):
         
         # set the device once for the whole class
         self.device = self.accelerator.device
+
+
+    @property
+    def current_indices(self):
+        return (self.indices_base + self.offset) % self.num_angles
+    
 
 
     def _set_seed(self):
@@ -214,7 +227,7 @@ class ModelBase(Module):
             self.n_single_BP,
             self.sparse_view, 
             self.offset,
-            self.indices,
+            self.current_indices,
             self.alpha,
             self.i_0,
             self.sigma,
@@ -233,7 +246,7 @@ class ModelBase(Module):
             self.n_single_BP, 
             self.sparse_view, 
             self.offset,
-            self.indices,
+            self.current_indices,
             self.alpha,  
             self.i_0, 
             self.sigma, 
@@ -512,6 +525,7 @@ class ModelBase(Module):
             >>> history = model.train("data/train", "data/val", save_path="out/model")
         """
         #changing paths parameters
+        self.offset = 0 # So if I want to retraine I am sure I am using the same angles
         epochs = epochs or self.epochs
         learning_rate = learning_rate or self.learning_rate
         self.training_path = training_path
@@ -681,7 +695,7 @@ class ModelBase(Module):
         self.n_single_BP, 
         self.sparse_view, 
         self.offset, 
-        self.indices,
+        self.current_indices,
         self.alpha,  
         self.i_0, 
         self.sigma, 
@@ -790,7 +804,7 @@ class ModelBase(Module):
         return predictions, gt_images, sinograms, total_test_loss, total_psnr, total_ssim
 
 
-    def test(self, test_path, max_len_test=None, offset = 0, indices = None):
+    def test(self, test_path, max_len_test=None, offset = 0):
         """
         Tests the trained model on a separate dataset.
 
@@ -807,10 +821,9 @@ class ModelBase(Module):
         Example:
             >>> results = model.test("data/test")
         """
-        if self.single_bp and offset != 0 :
+
+        if (self.single_bp or self.sparse_view) and self.offset != 0:
             self.offset = offset
-        elif self.sparse_view and indices != None:
-            self.indices = indices
 
         #changing paths parameters
         self.test_path = test_path
@@ -1009,7 +1022,16 @@ class ModelBase(Module):
 
 
     def _get_operator(self):
-        return self.A_sparse if self.sparse_view else self.A
+        if (self.sparse_view or self.single_bp) and self.offset == 0:
+            return self.A_sparse
+        elif (self.single_bp or self.sparse_view) and self.offset != 0:
+            angles_sparse = self.angles[self.current_indices]
+            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
+            self.A_sparse = ts.operator(self.vg, self.pg_sparse)
+            return self.A_sparse
+        else:
+            return self.A
+        
     
 
     def other_ct_reconstruction(self, sinogram, A, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):

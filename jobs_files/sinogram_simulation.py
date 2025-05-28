@@ -142,8 +142,8 @@ for folder, out_folder_gt, out_folder_ld  in zip(input_folders, output_folders_g
 
         images_upscaled = interpolate(images_tensor, size=(1000, 1000), mode='bilinear', align_corners=False)
 
-        # Forward projection to get sinograms
-        sinograms = A(images_upscaled)
+        # Forward projection to get sinograms (one by one)
+        sinograms = torch.stack([A(img) for img in images_upscaled])
 
         # Extract numeric ID from filename
         base_name = os.path.basename(file)

@@ -26,31 +26,39 @@ class ModelBase(Module):
     """
     Abstract base class for CT reconstruction training, evaluation, and analysis.
 
-    This class establishes a consistent interface and behavior for CT models by:
-    - Defining projection and volume geometries using the Tomosipo library.
-    - Loading and preprocessing CT datasets (LoDoPaB-style).
-    - Handling training loops, validation with metrics (PSNR, SSIM), and early stopping.
-    - Providing visualization and logging of training/testing progress.
-    - Supporting classical CT reconstruction algorithms (e.g., FBP, SIRT, EM, TV-Min, NAG-LS).
-
-    This class is intended to be subclassed with a defined model in `self.model`.
+    This class provides a flexible interface for deep learning and classical CT reconstruction algorithms.
+    It supports multiple data acquisition modes (full sinogram, sparse-view, single backprojection), integrates
+    noise modeling, angle indexing via offsets, and defines full training, evaluation, visualization, and testing workflows.
 
     Attributes:
-        model_path (str): Output path for checkpoints, logs, and metrics.
-        model_type (str): Identifier for the model architecture.
-        n_single_BP (int): Number of backprojections per sample.
-        alpha (float): Normalization constant for PSNR.
-        i_0 (float): Incident X-ray intensity used in noise simulation.
-        sigma (float): Standard deviation of Gaussian noise.
-        batch_size (int): Training and validation batch size.
-        epochs (int): Maximum number of training epochs.
-        optimizer_type (str): Optimizer type, e.g., 'Adam'.
-        loss_type (str): Loss function name, e.g., 'MSELoss'.
-        learning_rate (float): Initial learning rate.
-        debug (bool): Enables debug-level logging.
+        model_path (str): Path to save checkpoints, metrics, predictions, etc.
+        model_type (str): Identifier name for the model architecture.
+        single_bp (bool): Whether to use single backprojection mode.
+        sparse_view (bool): Whether to use sparse view sinogram mode.
+        n_single_BP (int): Number of backprojections used per sample (if single_bp is True).
+        view_angles (int): Number of angles used in sparse-view mode.
+        alpha (float): Scaling factor for PSNR computation.
+        i_0 (float): Incident X-ray intensity for noise modeling.
+        sigma (float): Standard deviation of added Gaussian noise.
+        batch_size (int): Batch size for training/validation/testing.
+        epochs (int): Number of training epochs.
+        optimizer_type (str): Optimizer type ('Adam', 'AdamW'). 
+        loss_type (str): Loss function ('MSELoss', 'L1Loss').
+        learning_rate (float): Learning rate for the optimizer.
         seed (int): Seed for reproducibility.
-        scheduler (bool): Enables learning rate scheduling.
-        accelerator (Accelerator): accelerate.Accelerator instance for distributed training.
+        debug (bool): If True, enables verbose logging.
+        scheduler (bool): If True, uses learning rate scheduler.
+        offset (int): Integer offset applied to angular indices. Only for testing.
+        accelerator (Accelerator): accelerate.Accelerator object for mixed precision and device handling.
+        trained (bool): Whether the model has been trained. This is an internal flag.
+        indices_base (torch.Tensor): Base angular indices for sparse_view or single_bp mode. This are calculated inside the class.
+        current_indices (torch.Tensor): Angular indices including offset. This are calculated inside the class if the offset is changed during testing.
+        A (ts.Operator): Full tomosipo projection operator.
+        A_sparse (ts.Operator): Sparse-view or backprojection projection operator. This is internally calculated for sparse-view CT.
+        vg (ts.VolumeGeometry): Tomosipo volume geometry.
+        pg (ts.ProjectionGeometry): Full-angle projection geometry.
+        pg_sparse (ts.ProjectionGeometry): Projection geometry corresponding to selected indices. This is internally calculated for sparse-view CT.
+        device (torch.device): Torch device derived from accelerator.
 
     Example:
         >>> from accelerate import Accelerator
@@ -59,6 +67,8 @@ class ModelBase(Module):
         ...     model_type='UNet',
         ...     single_bp=True,
         ...     n_single_BP=10,
+        ...     sparse_view=False,
+        ...     view_angles=50,
         ...     alpha=0.001,
         ...     i_0=1e5,
         ...     sigma=0.01,
@@ -337,29 +347,28 @@ class ModelBase(Module):
 
     def train_one_epoch(self, train_dataloader, opt, loss, e, save_path, show_examples, number_of_examples, fixed_input, fixed_gt):
         """
-        Executes a single epoch of training.
+        Train the model for a single epoch.
 
-        This includes computing predictions, calculating the loss,
-        performing backpropagation, and updating weights.
-        Optionally displays and saves example outputs every few epochs.
+        Performs forward passes, loss computation, backpropagation, and optimizer steps
+        for each batch. Optionally saves output predictions for a fixed batch every 5 epochs.
 
         Args:
-            train_dataloader (DataLoader): Training data loader.
-            opt (torch.optim.Optimizer): Optimizer for parameter updates.
+            train_dataloader (DataLoader): Dataloader for training data.
+            opt (torch.optim.Optimizer): Optimizer instance.
             loss (nn.Module): Loss function.
-            e (int): Current epoch index.
-            save_path (str): Base path to save example outputs.
-            show_examples (bool): Whether to save output examples.
-            number_of_examples (int): Number of examples to show.
-            fixed_input (Tensor): Input batch for visualization.
-            fixed_gt (Tensor): Ground truth batch for visualization.
+            epoch_idx (int): Current epoch number.
+            save_path (str): Path prefix for saving visual outputs.
+            show_examples (bool): If True, visualizes model predictions every 5 epochs.
+            number_of_examples (int): Number of samples to visualize.
+            fixed_input (Tensor): Batch of fixed inputs for visualization.
+            fixed_gt (Tensor): Corresponding ground truth for `fixed_input`.
 
         Returns:
-            float: Total training loss accumulated during the epoch.
+            float: Total accumulated training loss for the epoch.
 
         Example:
             >>> loss = nn.MSELoss()
-            >>> total_loss = self.train_one_epoch(loader, optimizer, loss, 0, 'out/epoch0', True, 2, x_fixed, y_fixed)
+            >>> train_loss = self.train_one_epoch(loader, optimizer, loss, 0, 'out/epoch0', True, 2, x_fixed, y_fixed)
         """
 
         # set the model in training mode
@@ -425,16 +434,16 @@ class ModelBase(Module):
 
     def validation(self, val_dataloader, loss, mse_fn, e):
         """
-        Runs evaluation on the validation dataset.
+        Evaluate model performance on the validation set.
 
-        Computes the total loss, PSNR, and SSIM for each batch.
-        Optionally uses an alternate MSE function to compute PSNR if the main loss is not MSE.
+        Computes total validation loss, PSNR, and SSIM. If the training loss is not MSE,
+        a separate MSE function is used for PSNR computation.
 
         Args:
-            val_dataloader (DataLoader): Validation data loader.
-            loss (nn.Module): Loss function used in training.
-            mse_fn (nn.Module or None): Optional MSE function for PSNR computation.
-            e (int): Epoch number (for logging/progress bar).
+            val_dataloader (DataLoader): Dataloader for validation data.
+            loss (nn.Module): Loss function used during training.
+            mse_fn (nn.Module or None): MSE loss function used to compute PSNR, if needed.
+            e (int): Current epoch index (used for progress display).
 
         Returns:
             tuple: (total_val_loss, total_psnr, total_ssim)
@@ -500,30 +509,31 @@ class ModelBase(Module):
 
     def train(self, training_path, validation_path, save_path, max_len_train = None, max_len_val=None, patience=10, epochs=None, learning_rate=None, confirm_train=False, show_examples=True, number_of_examples=1):
         """
-        Trains the model with early stopping and optional learning rate scheduling.
+        Train the model with validation, early stopping, and optional learning rate scheduling.
 
-        Includes model summary, optimizer/loss setup, training/validation loops,
-        and metrics logging. Also supports checkpointing and visualization.
+        Performs full training pipeline: model setup, dataloader preparation, training/validation loop,
+        checkpointing, metric tracking, and optional visualization of predictions.
 
         Args:
-            training_path (str): Path to training dataset.
-            validation_path (str): Path to validation dataset.
-            save_path (str): Output prefix for saved checkpoints and plots.
-            max_len_train (int, optional): Max number of training samples.
-            max_len_val (int, optional): Max number of validation samples.
-            patience (int): Early stopping patience.
-            epochs (int, optional): Number of training epochs.
-            learning_rate (float, optional): Override default learning rate.
-            confirm_train (bool): Prompt confirmation before training.
-            show_examples (bool): Whether to visualize intermediate results.
-            number_of_examples (int): Number of visualized examples.
+            training_path (str): Path to the training dataset directory.
+            validation_path (str): Path to the validation dataset directory.
+            save_path (str): Prefix path for saving checkpoints and visual outputs.
+            max_len_train (int, optional): Max number of training samples to use.
+            max_len_val (int, optional): Max number of validation samples to use.
+            patience (int): Number of epochs to wait for improvement before early stopping.
+            epochs (int, optional): Total number of training epochs. Overrides default.
+            learning_rate (float, optional): Learning rate for optimizer. Overrides default.
+            confirm_train (bool): If True, prompts user to confirm model architecture before training.
+            show_examples (bool): Whether to visualize and save sample predictions.
+            number_of_examples (int): Number of examples to visualize when `show_examples` is True.
 
         Returns:
-            dict: History dictionary with loss, PSNR, SSIM per epoch.
+            dict: Dictionary with history of losses, PSNR, and SSIM per epoch.
 
         Example:
-            >>> history = model.train("data/train", "data/val", save_path="out/model")
+            >>> history = model.train(\"data/train\", \"data/val\", save_path=\"checkpoints/my_model\")
         """
+
         #changing paths parameters
         self.offset = 0 # So if I want to retraine I am sure I am using the same angles
         epochs = epochs or self.epochs
@@ -671,17 +681,16 @@ class ModelBase(Module):
 
     def _get_test_dataloaders(self):
         """
-        Loads the test dataset and constructs a DataLoader.
+        Constructs the test DataLoader using the LoDoPaBDataset.
 
-        This method initializes a `LoDoPaBDataset` for the test set using the configured
-        volume geometry, projection geometry, and noise parameters. The resulting dataset
-        is wrapped in a PyTorch DataLoader with deterministic settings.
+        Initializes the test dataset with all relevant geometrical and noise parameters.
+        Uses `self.current_indices` to define angular subsets if `sparse_view` or `single_bp` is active.
 
         Returns:
-            DataLoader: DataLoader instance for the test dataset.
+            DataLoader: PyTorch DataLoader for the test dataset (no shuffle, pin_memory=True).
 
         Example:
-            >>> self.test_path = "data/test"
+            >>> self.test_path = "data/ground_truth_test"
             >>> self.max_len_test = 200
             >>> test_loader = self._get_test_dataloaders()
         """
@@ -718,21 +727,28 @@ class ModelBase(Module):
 
     def evaluate(self, test_dataloader, loss, mse_fn):
         """
-        Evaluates the model on a test set with performance metrics.
+        Evaluates the model on the test set using loss, PSNR, and SSIM.
 
-        Computes the total test loss, PSNR, and SSIM. Also returns raw prediction,
-        ground truth, and sinogram tensors for downstream visualization or analysis.
+        Performs forward passes without gradients and accumulates metrics across all batches.
+        Also returns predictions, ground truths, and input sinograms for optional analysis.
 
         Args:
-            test_dataloader (DataLoader): DataLoader with test samples.
-            loss (nn.Module): Loss function to compute evaluation error.
-            mse_fn (nn.Module or None): MSE loss for PSNR (if needed).
+            test_dataloader (DataLoader): DataLoader containing test samples.
+            loss (nn.Module): Loss function used for evaluation.
+            mse_fn (nn.Module or None): MSE function used to compute PSNR if loss is not MSE.
 
         Returns:
-            tuple: (predictions, ground_truths, sinograms, total_loss, total_psnr, total_ssim)
+            tuple: (
+                predictions (List[Tensor]): List of prediction batches (on CPU),
+                ground_truths (List[Tensor]): List of ground truth batches (on CPU),
+                sinograms (List[Tensor]): List of input sinograms (sparse or noisy, on CPU),
+                total_loss (float): Accumulated test loss,
+                total_psnr (float): Accumulated PSNR across batches,
+                total_ssim (float): Accumulated SSIM across batches
+            )
 
         Example:
-            >>> preds, gts, sinos, loss, psnr, ssim = model.evaluate(test_loader, loss_fn, mse_fn)
+            >>> preds, ground_truth, sinograms, loss, psnr, ssim = model.evaluate(test_loader, loss_fn, mse_fn)
         """
 
         # save ground truth and predictions
@@ -806,20 +822,26 @@ class ModelBase(Module):
 
     def test(self, test_path, max_len_test=None, offset = 0):
         """
-        Tests the trained model on a separate dataset.
+        Tests the trained model on a designated test dataset.
 
-        This method loads test samples, computes predictions, saves results to disk,
-        and logs PSNR/SSIM scores. It uses the same loss function used during training.
+        Loads the test dataset, runs forward inference, computes evaluation metrics (loss, PSNR, SSIM),
+        and saves predictions, ground truths, and input sinograms to disk.
 
         Args:
-            test_path (str): Path to test dataset.
-            max_len_test (int, optional): Max number of test samples.
+            test_path (str): Path to the test dataset.
+            max_len_test (int, optional): Max number of test samples to load.
+            offset (int, optional): Angular index offset to apply if `sparse_view` or `single_bp` is used.
 
         Returns:
-            dict: Dictionary with test loss, PSNR, and SSIM.
+            dict: Dictionary with average test loss, PSNR, and SSIM scores.
+
+        Side Effects:
+            - Modifies `self.test_path` and `self.max_len_test`.
+            - Saves .pt files for predictions, ground truth images, and sinograms.
+            - Saves metrics to a .json file.
 
         Example:
-            >>> results = model.test("data/test")
+            >>> results = model.test("data/ground_truth_test", max_len_test=200)
         """
 
         if (self.single_bp or self.sparse_view) and self.offset != 0:
@@ -894,23 +916,28 @@ class ModelBase(Module):
 
     def results(self, mode, example_number = 0, save_path=None):
         """
-        Visualizes training and/or testing results with optional plots and image comparisons.
+        Generate visual summaries of training and/or testing results.
 
-        Generates performance plots (Loss, PSNR, SSIM) over training epochs, and optionally
-        displays side-by-side image comparisons of predictions vs. ground truth on test data.
+        Depending on the mode, this function will:
+        - Plot training loss, PSNR, and SSIM over epochs.
+        - Print test metrics and visualize prediction vs ground truth images.
+        - Optionally save all generated plots.
 
         Args:
-            mode (str): One of ['training', 'testing', 'both'] to specify what to plot.
-            example_number (int): Number of test examples to visualize (for 'testing' mode).
-            save_path (str, optional): Base path for saving generated plot images.
+            mode (str): One of ['training', 'testing', 'both']. Determines which plots to produce.
+            example_number (int): Number of test samples to visualize in 'testing' mode.
+            save_path (str, optional): Path prefix for saving plots.
 
         Returns:
-            list[int] or None: List of visualized test sample indices if `mode='testing'`.
+            list[int] or None: List of indices of test samples visualized (only if mode='testing').
+
+        Raises:
+            ValueError: If `mode` is invalid.
 
         Example:
-            >>> model.results(mode='training', save_path='outputs/train')
-            >>> model.results(mode='testing', example_number=3)
-            >>> model.results(mode='both', save_path='outputs/combined')
+            >>> model.results(mode='training', save_path='outputs/plots')
+            >>> model.results(mode='testing', example_number=5)
+            >>> model.results(mode='both')
         """
         # checking if the model has been trained before
         if not self.trained:
@@ -1022,6 +1049,26 @@ class ModelBase(Module):
 
 
     def _get_operator(self):
+        """
+        Selects and returns the appropriate tomography operator.
+
+        Returns the standard operator (`self.A`) for full-view scenarios, or constructs
+        and returns a sparse-view operator (`self.A_sparse`) when `sparse_view` or `single_bp`
+        is enabled. If `offset` is non-zero, the operator is redefined using
+        `self.current_indices` to apply angular shifting.
+
+        Returns:
+            ts.Operator: Tomosipo operator configured for the current acquisition mode.
+
+        Notes:
+            - If `offset == 0`, a previously cached sparse operator is reused.
+            - If `offset != 0`, a new sparse operator is constructed with shifted angles.
+            - Assumes `self.angles` and `self.current_indices` are up to date.
+        
+        Example:
+            >>> A = model._get_operator()
+        """
+        
         if (self.sparse_view or self.single_bp) and self.offset == 0:
             return self.A_sparse
         elif (self.single_bp or self.sparse_view) and self.offset != 0:
@@ -1036,23 +1083,21 @@ class ModelBase(Module):
 
     def other_ct_reconstruction(self, sinogram, A, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
         """
-        Visualizes training and/or testing results with optional plots and image comparisons.
+        Performs classical CT reconstruction algorithms on a given sinogram.
 
-        Generates performance plots (Loss, PSNR, SSIM) over training epochs, and optionally
-        displays side-by-side image comparisons of predictions vs. ground truth on test data.
+        Applies several reconstruction techniques: FBP, SIRT, EM, TV-minimization, and NAG-LS.
 
         Args:
-            mode (str): One of ['training', 'testing', 'both'] to specify what to plot.
-            example_number (int): Number of test examples to visualize (for 'testing' mode).
-            save_path (str, optional): Base path for saving generated plot images.
+            sinogram (Tensor): Input sinogram of shape (1, A, D).
+            A (ts.Operator): Tomosipo operator used for reconstruction.
+            num_iterations_sirt (int): Iterations for SIRT algorithm.
+            num_iterations_em (int): Iterations for EM algorithm.
+            num_iterations_tv_min (int): Iterations for TV-minimization.
+            num_iterations_nag_ls (int): Iterations for NAG-LS.
+            lamda (float): Regularization parameter for TV-minimization.
 
         Returns:
-            list[int] or None: List of visualized test sample indices if `mode='testing'`.
-
-        Example:
-            >>> model.results(mode='training', save_path='outputs/train')
-            >>> model.results(mode='testing', example_number=3)
-            >>> model.results(mode='both', save_path='outputs/combined')
+            dict: Reconstructions from each method with keys: ['fbp', 'sirt', 'em', 'tv_min', 'nag_ls'].
         """
         #Ensure the sinogram has correct shape
         if sinogram.ndim == 4:
@@ -1082,27 +1127,25 @@ class ModelBase(Module):
 
     def report_results_images(self, save_path, samples, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
         """
-        Generates image-based visual comparison of model predictions and classical methods.
+        Generates and saves visual comparisons of reconstructions across methods.
 
-        Each sample includes:
-        - Ground truth image
-        - Model prediction
-        - Classical reconstructions (FBP, SIRT, EM, TV-Min, NAG-LS)
+        For each selected test sample, displays the ground truth, model prediction,
+        and results from classical methods (FBP, SIRT, EM, TV-Min, NAG-LS).
 
         Args:
-            save_path (str): Output prefix for saving figures.
+            save_path (str): Prefix path to save output figures.
             samples (list[int]): Indices of test samples to visualize.
             num_iterations_sirt (int): Iterations for SIRT.
             num_iterations_em (int): Iterations for EM.
             num_iterations_tv_min (int): Iterations for TV minimization.
             num_iterations_nag_ls (int): Iterations for NAG-LS.
-            lamda (float): Regularization weight for TV minimization.
+            lamda (float): TV regularization parameter.
 
         Raises:
-            RuntimeError: If required .pt files are missing.
+            RuntimeError: If required prediction, GT or sinogram files are missing.
 
         Example:
-            >>> model.report_results_images('out/images', samples=[0, 5, 12])
+            >>> model.report_results_images('out/visuals', samples=[0, 5, 10])
         """
         
         if not self.trained:
@@ -1142,21 +1185,24 @@ class ModelBase(Module):
     def report_results_table(self, save_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,
                          num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False):
         """
-        Computes and saves average PSNR/SSIM for classical reconstruction methods on test data.
+        Computes average PSNR and SSIM for classical reconstruction algorithms on the test set.
 
-        If `only_results=True`, computes metrics from raw test inputs without relying on saved
-        prediction files. Otherwise, loads previously saved .pt files for evaluation.
+        If `only_results=True`, recomputes from raw test sinograms and GT using reconstruction algorithms.
+        Otherwise, loads saved prediction and sinogram files from disk.
 
         Args:
-            save_path (str): Path prefix to store CSV file.
-            test_path (str): Path to the test dataset (required if only_results=True).
+            save_path (str): Path prefix for saving the CSV file.
+            test_path (str): Test dataset path (required if only_results=True).
             max_len_test (int): Number of test samples (required if only_results=True).
-            num_iterations_sirt (int): Iterations for SIRT.
-            num_iterations_em (int): Iterations for EM.
+            num_iterations_sirt (int): Iterations for SIRT algorithm.
+            num_iterations_em (int): Iterations for EM algorithm.
             num_iterations_tv_min (int): Iterations for TV minimization.
             num_iterations_nag_ls (int): Iterations for NAG-LS.
-            lamda (float): Regularization weight for TV.
-            only_results (bool): If True, recompute from raw data.
+            lamda (float): Regularization weight for TV minimization.
+            only_results (bool): If True, re-evaluate directly from dataset instead of loading saved .pt files.
+
+        Raises:
+            ValueError: If required arguments are missing when only_results=True.
 
         Example:
             >>> model.report_results_table('results/classical', test_path='data/test', max_len_test=256, only_results=True)

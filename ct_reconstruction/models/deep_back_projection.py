@@ -25,6 +25,7 @@ class DBP(ModelBase):
         - One final convolutional layer without activation.
 
     Args:
+        model_type (str): Identifier string, set to "DBP".
         model_path (str): Directory path to save model checkpoints and logs.
         n_single_BP (int): Number of single-angle backprojections per sample.
         alpha (float): Scaling factor applied to log-transformed sinograms.

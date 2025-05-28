@@ -10,32 +10,28 @@ from tomosipo.torch_support import (to_autograd)
 
 class DeepFBPNetwork(Module):
     """
-    Internal model for Deep Filtered Backprojection (DeepFBP) CT reconstruction.
+    Neural network implementation of the Deep Filtered Backprojection (DeepFBP) model for CT reconstruction.
 
-    This neural network combines a learnable FBP filtering stage, interpolation blocks,
-    and a CNN-based denoiser to reconstruct high-quality CT images from sinograms.
-
-    Components:
-        - Learnable filter module (shared or per-angle)
-        - Depthwise 1D convolutional interpolators
-        - Differentiable backprojection layer
-        - 2D CNN denoising module
+    The architecture consists of:
+    - A learnable frequency-domain filter module.
+    - Depthwise 1D convolutional interpolation blocks for each angle.
+    - A differentiable backprojection layer via Tomosipo.
+    - A 2D CNN-based denoising network for image refinement.
 
     Args:
-        num_detectors (int): Number of detectors in the CT system.
+        num_detectors (int): Number of detector bins.
         num_angles (int): Number of projection angles.
-        A (callable): Forward projection operator (Radon transform).
-        filter_type (str): Filtering strategy. Use "Filter I" for shared filtering.
+        A (ts.Operator): Tomosipo forward projection operator.
+        filter_type (str): Filtering mode. "Filter I" for shared filter, any other for per-angle.
 
     Attributes:
         learnable_filter (LearnableFilter): Trainable frequency-domain filter module.
-        interpolator_{1-3} (nn.Sequential): Depthwise 1D convolutional interpolation blocks.
-        interpolator_conv (nn.Conv1d): Final 1D convolutional layer for angular smoothing.
-        denoising_conv_1 (nn.Conv2d): Initial convolution layer for image denoising.
-        denoising_res_{1-3} (nn.Sequential): Intermediate residual blocks for denoising.
-        denoising_conv_2 (nn.Conv2d): Final convolution layer to reconstruct output image.
+        interpolator_{1-3} (Sequential): Depthwise residual blocks for angular interpolation.
+        interpolator_conv (Conv1d): Final angular smoothing convolution.
+        denoising_conv_1 (Conv2d): Initial conv layer in the denoising CNN.
+        denoising_res_{1-3} (Sequential): Intermediate residual conv blocks.
+        denoising_conv_2 (Conv2d): Final output conv layer of the denoiser.
     """
-
     def __init__(self, num_detectors, num_angles, A, filter_type):
         # initilize parameter from parent clase Module
         super().__init__()
@@ -143,7 +139,7 @@ class DeepFBPNetwork(Module):
         The pipeline includes:
             - Learnable filtering in the frequency domain
             - Angular interpolation using depthwise convolutions
-            - Differentiable backprojection via custom operator
+            - Differentiable backprojection via tomosipo operator
             - Denoising using a 2D CNN
 
         Args:
@@ -203,62 +199,37 @@ class DeepFBPNetwork(Module):
 
 class DeepFBP(ModelBase):
     """
-    Main interface for training and managing the Deep Filtered Backprojection (DeepFBP) model.
+    High-level wrapper for training and managing the Deep Filtered Backprojection (DeepFBP) model.
 
-    This class wraps the `DeepFBPNetwork` and provides a high-level interface for training
-    in structured phases, saving configurations, and controlling model behavior
-    across the CT reconstruction pipeline.
+    This class extends `ModelBase` and encapsulates the DeepFBP-specific functionality, including
+    configurable projection geometry (sparse or full view), structured training phases,
+    and model configuration serialization.
 
-    The DeepFBP model enhances classical Filtered Backprojection by introducing:
-        - Learnable frequency-domain filters
-        - 1D angular interpolation modules
-        - A 2D CNN denoising stage
+    DeepFBP enhances classical FBP by integrating:
+        - Trainable frequency-domain filtering (shared or per-angle)
+        - Learnable 1D angular interpolation modules
+        - Residual 2D CNN-based image denoising
 
     Args:
         model_path (str): Path to save model checkpoints and logs.
-        filter_type (str): Type of filter. Options:
-            - "Filter I": Shared filter across angles.
-            - Any other string: Per-angle filters.
-        alpha (float): Log scaling factor for projection values.
-        i_0 (float): Incident photon intensity (used for simulating noise).
-        sigma (float): Gaussian noise standard deviation.
-        batch_size (int): Number of samples per batch.
-        epochs (int): Number of training epochs.
+        filter_type (str): Filtering strategy. "Filter I" for shared filter, others for per-angle.
+        sparse_view (bool): Whether to use sparse-angle projection geometry.
+        view_angles (int): Number of angles if using sparse-view mode.
+        alpha (float): Log-scaling factor for sinogram preprocessing.
+        i_0 (float): Incident photon count for noise simulation.
+        sigma (float): Standard deviation for additive Gaussian noise.
+        batch_size (int): Number of samples per training batch.
+        epochs (int): Total number of training epochs.
         learning_rate (float): Optimizer learning rate.
-        debug (bool): Enable verbose debug output.
-        seed (int): Seed for reproducibility.
-        accelerator (torch.device): Device for training (e.g., `torch.device("cuda")`).
-        scheduler (str): Learning rate scheduler type.
-        log_file (str): Path to output log file.
+        debug (bool): If True, enables verbose output and plotting.
+        seed (int): Random seed for reproducibility.
+        accelerator (torch.device): Device for training.
+        scheduler (str): Learning rate scheduler identifier.
+        log_file (str): Log file path for training events.
 
     Attributes:
-        model (DeepFBPNetwork): Core model instance.
-        current_phase (int): Current training phase (1, 2, or 3).
-
-    Example:
-        >>> from ct_reconstruction.models import DeepFBP
-        >>> model = DeepFBP(
-        ...     model_path="checkpoints/deepfbp",
-        ...     filter_type="Filter I",
-        ...     alpha=0.001,
-        ...     i_0=1e5,
-        ...     sigma=0.01,
-        ...     batch_size=4,
-        ...     epochs=100,
-        ...     learning_rate=1e-3,
-        ...     debug=True,
-        ...     seed=42,
-        ...     accelerator=torch.device("cuda"),
-        ...     scheduler="StepLR",
-        ...     log_file="train.log"
-        ... )
-        >>> model.train_deepFBP(
-        ...     training_path="data/train",
-        ...     validation_path="data/val",
-        ...     save_path="checkpoints/deepfbp",
-        ...     phase=1
-        ... )
-        >>> model.save_config()
+        model (DeepFBPNetwork): The underlying neural architecture.
+        current_phase (int): The training phase currently in use (1–3).
     """
 
     def __init__(self, model_path, filter_type, sparse_view, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed,accelerator, scheduler, log_file):
@@ -272,16 +243,29 @@ class DeepFBP(ModelBase):
 
         self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type)
 
+
     def _build_projection_operator(self):
         """
-        Builds the appropriate tomosipo projection operator depending on whether
-        sparse-view mode is enabled.
+        Constructs the appropriate tomosipo projection operator based on view configuration.
+
+        If sparse-view reconstruction is enabled, this method subsamples the available
+        projection angles using evenly spaced indices and builds a sparse-view operator.
+        Otherwise, it uses the full set of angles and the default projection operator.
 
         Returns:
-            A (ts.Operator): Tomosipo forward operator
-            pg (ts.ProjectionGeometry): Corresponding projection geometry
-            num_angles (int): Number of angles used
+            A (ts.Operator): Tomosipo forward projection operator.
+            pg (ts.ProjectionGeometry): Associated projection geometry.
+            num_angles (int): Number of projection angles used.
+
+        Notes:
+            - The sparse-view operator is useful for simulating reduced acquisition scenarios.
+            - The selected angles are stored via `self.indices` and reused elsewhere.
+            - This method also logs which configuration is applied.
+
+        Example:
+            >>> A, pg, n_angles = self._build_projection_operator()
         """
+        
         if self.sparse_view:
             self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
             angles_sparse = self.angles[self.indices]
@@ -297,15 +281,21 @@ class DeepFBP(ModelBase):
         
         return A, pg, num_angles
 
+
     def set_training_phase(self, phase):
         """
-        Set model training phase and selectively activate parts of the network.
+        Configures model parameter training for staged learning.
+
+        Phase options:
+            1 → Train only the learnable frequency filter.
+            2 → Train the filter + interpolator blocks.
+            3 → Train the entire model (filter + interpolator + denoiser).
 
         Args:
-            phase (int): Training phase (1: filter only, 2: filter + interpolation, 3: all layers).
+            phase (int): Training stage identifier (1, 2, or 3).
 
         Raises:
-            ValueError: If an invalid phase is specified.
+            ValueError: If the input phase is not one of [1, 2, 3].
         """
         # change all parameters to no require gradient
         for param in self.model.parameters():
@@ -338,23 +328,24 @@ class DeepFBP(ModelBase):
 
     def train_deepFBP(self, training_path, validation_path, save_path, max_len_train=None, max_len_val=None, patience=10, epochs = None, learning_rate= None, confirm_train=False, show_examples=True, number_of_examples=1, phase=1):
         """
-        Trains the DeepFBP model using a specific training phase.
+        Conducts training of the DeepFBP model according to a selected training phase.
 
         Args:
-            training_path (str): Path to training dataset.
-            validation_path (str): Path to validation dataset.
-            save_path (str): Path to save model checkpoints.
-            max_len_train (int, optional): Max training samples.
-            max_len_val (int, optional): Max validation samples.
+            training_path (str): Path to training data.
+            validation_path (str): Path to validation data.
+            save_path (str): Where to save the trained model.
+            max_len_train (int, optional): Max number of training samples to use.
+            max_len_val (int, optional): Max number of validation samples to use.
             patience (int): Early stopping patience.
-            confirm_train (bool): Ask for user confirmation before training.
-            show_examples (bool): Show reconstructed examples during training.
-            number_of_examples (int): Number of examples to show.
-            phase (int): Training phase to activate.
+            epochs (int, optional): Override number of epochs.
+            learning_rate (float, optional): Override learning rate.
+            confirm_train (bool): Whether to prompt confirmation before training.
+            show_examples (bool): If True, visualize sample reconstructions.
+            number_of_examples (int): Number of visual samples to show.
+            phase (int): Training phase (1, 2, or 3).
 
         Returns:
-            dict: Training history metrics.
-
+            dict: Training history with metrics (loss, PSNR, SSIM).
         """
         # set the training phase
         self.set_training_phase(phase)
@@ -456,4 +447,3 @@ class LearnableFilter(Module):
         
         # retorn the filtered sinogram 
         return torch.fft.ifft(filtered, dim=-1).real
-    

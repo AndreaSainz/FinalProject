@@ -80,6 +80,7 @@ from glob import glob
 
 #Scan parameters from the paper and data
 pixels = 362               # Image resolution of 362x362 pixels on a domain size of 26x26 cm
+pixel_size = 26.0
 pixels_upsampling = 1000
 num_angles = 1000
 num_detectors = 513        # 513 equidistant detector bins s spanning the image diameter.
@@ -90,10 +91,16 @@ u_max = 81.35858
 
 
 # Create tomosipo volume and projection geometry
-vg = ts.volume(shape=(1,pixels_upsampling,pixels_upsampling))                                                  # Volumen
+vg = ts.volume(shape=(1, pixels_upsampling, pixels_upsampling),size=(1.0, pixel_size,pixel_size))                                               # Volumen
 angles = np.linspace(0, np.pi, num_angles, endpoint=True)                                # Angles
-pg = ts.cone(angles = angles, src_orig_dist=src_orig_dist, shape=(1, num_detectors))     # Fan beam structure
-A = ts.operator(vg,pg)                                                                  # Operator
+pg = ts.cone(
+    angles=angles,
+    src_orig_dist=src_orig_dist,
+    src_det_dist=src_det_dist,
+    shape=(1, num_detectors),
+    size=(1.0, pixel_size) 
+)     # Fan beam structure
+A = ts.operator(vg,pg)
 
 
 
@@ -142,18 +149,12 @@ for folder, out_folder_gt, out_folder_ld  in zip(input_folders, output_folders_g
         mode = parts[2]  # e.g., 'test' from 'ground_truth_test_000.hdf5'
         file_num = parts[-1].split('.')[0]  # e.g., '000'
 
-
-        # Upsample from 362x362 to 1000x1000 to avoid inverse crime
         images_tensor = torch.tensor(images)
         if images_tensor.ndim == 2:
-            images_tensor = images_tensor.unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
-        elif images_tensor.ndim == 3:
-            images_tensor = images_tensor.unsqueeze(1)  # [N, 1, H, W]
-
-        images_upscaled = interpolate(images_tensor, size=(1000, 1000), mode='bilinear', align_corners=False)
+          images_tensor = images_tensor.unsqueeze(0)  # [1, H, W]
 
         # Forward projection to get sinograms (one by one)
-        sinograms = torch.stack([A(img) for img in images_upscaled])
+        sinograms = torch.stack([A(img) for img in images_tensor])
 
         # Save ground truth with sinograms
         output_path_gt = os.path.join(out_folder_gt, f"ground_truth_{mode}_{file_num}.hdf5")

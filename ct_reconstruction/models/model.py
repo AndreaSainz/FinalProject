@@ -94,6 +94,7 @@ class ModelBase(Module):
         #Scan parameters from the paper and data
         self.pixels = 362               # Image resolution of 362x362 pixels on a domain size of 26x26 cm
         self.num_angles = 1000
+        self.pixel_size = 26.0
         self.num_detectors = 513        # 513 equidistant detector bins s spanning the image diameter.
         self.src_orig_dist = 575
         self.src_det_dist = 1050
@@ -132,9 +133,9 @@ class ModelBase(Module):
         self.indices = None
 
         # Create tomosipo volume and projection geometry
-        self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
+        self.vg = ts.volume(shape=(1,self.pixels,self.pixels), size=(1.0, self.pixel_size,self.pixel_size))                                                       # Volumen
         self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
-        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
+        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, src_det_dist=self.src_det_dist, shape=(1, self.num_detectors),size=(1.0,self.pixel_size) )     # Fan beam structure
         self.A = ts.operator(self.vg,self.pg)     
    
 
@@ -142,14 +143,14 @@ class ModelBase(Module):
             self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
             # so the angles match the subset that was taken from the original angles
             angles_sparse = self.angles[self.indices_base] 
-            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
+            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, src_det_dist=self.src_det_dist, shape=(1, self.num_detectors),size=(1.0,self.pixel_size) )
             self.A_sparse = ts.operator(self.vg, self.pg_sparse)
 
         elif self.single_bp:
             self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.n_single_BP).long()
             # so the angles match the subset that was taken from the original angles
             angles_sparse = self.angles[self.indices_base] 
-            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
+            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, src_det_dist=self.src_det_dist, shape=(1, self.num_detectors),size=(1.0,self.pixel_size) )
             self.A_sparse = ts.operator(self.vg, self.pg_sparse)
         else:
             self.indices_base = torch.arange(self.num_angles)

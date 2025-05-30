@@ -26,7 +26,6 @@ class LoDoPaBDataset(Dataset):
         single_bp (bool): If True, compute single-angle backprojections.
         n_single_BP (int): Number of angles to use for single-angle backprojections.
         sparse_view (bool): If True, use sparse-view sinograms instead of full projections.
-        offset (int): Offset index for angle selection in sparse view.
         indices (list[int], optional): Custom angle indices for sparse view.
         alpha (float): Normalization factor for ground truth and sinograms.
         i_0 (float): Incident photon count for Poisson noise simulation.
@@ -75,7 +74,7 @@ class LoDoPaBDataset(Dataset):
     """
 
 
-    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, offset = 0, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
+    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
 
         if single_bp and sparse_view:
             ValueError("Sparse-view sinogram and single view backprojections are not compatible now, choose one of them")
@@ -93,7 +92,6 @@ class LoDoPaBDataset(Dataset):
         self.indices = indices
         self.alpha = alpha
         self.device= device
-        self.offset = offset
         
 
         # Noise parameter  
@@ -117,12 +115,8 @@ class LoDoPaBDataset(Dataset):
         self.A = A 
 
 
-        # Select subset of angles for sparse-view backprojection
-        if self.indices is None:
-            # Tomar n_single_BP ángulos equidistantes desde offset
-            self.angles_SBP = [(offset + i * (self.num_angles // self.n_single_BP)) % self.num_angles for i in range(self.n_single_BP)]
-        else:
-            self.angles_SBP = (self.indices + self.offset) % self.num_angles
+        if (self.single_bp or self.sparse_view) and self.indices is None:
+            raise TypeError(f"Indices are needed")
 
         # Prepare list of data files
         self.ground_truth_dir = ground_truth_dir

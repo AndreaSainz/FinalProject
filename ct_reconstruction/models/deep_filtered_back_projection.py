@@ -152,7 +152,10 @@ class DeepFBPNetwork(Module):
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
 
-        plt.imshow(x[0,0].detach().cpu().numpy(), cmap="gray", aspect='auto')
+        img = x[0, 0]
+        print(f"Shape: {img.shape}, dtype: {img.dtype}")
+
+        plt.imshow(img.detach().cpu().float().numpy(), cmap="gray", aspect='auto')
         plt.title("Sinograma antes del filtrado")
         plt.colorbar()
         plt.show()

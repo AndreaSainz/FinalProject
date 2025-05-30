@@ -77,7 +77,7 @@ class LoDoPaBDataset(Dataset):
     def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
 
         if single_bp and sparse_view:
-            ValueError("Sparse-view sinogram and single view backprojections are not compatible now, choose one of them")
+            raise ValueError("Sparse-view sinogram and single view backprojections are not compatible now, choose one of them")
 
         #Scan parameters from the paper and data
         self.pixels = 362               # Image resolution of 362x362 pixels on a domain size of 26x26 cm
@@ -89,10 +89,18 @@ class LoDoPaBDataset(Dataset):
         self.n_single_BP = int(n_single_BP)
         self.single_bp = single_bp
         self.sparse_view = sparse_view
-        self.indices = indices
         self.alpha = alpha
         self.device= device
         
+        if self.single_bp or self.sparse_view:
+            if indices is None:
+                if self.single_bp:
+                    indices = torch.linspace(0, self.num_angles - 1, steps=self.n_single_BP).long()
+                elif self.sparse_view:
+                    indices = torch.linspace(0, self.num_angles - 1, steps=90).long()  # Default for sparse view
+            if not isinstance(indices, torch.Tensor):
+                indices = torch.tensor(indices, dtype=torch.long)
+        self.indices = indices
 
         # Noise parameter  
         self.i_0 = i_0                  # Incident photons
@@ -340,7 +348,7 @@ class LoDoPaBDataset(Dataset):
 
         projections = []
         
-        for angle_idx in self.angles_SBP:
+        for angle_idx in self.indices:
             # Define Fan Beam Geometry for each angle
             proj_geom_single = ts.cone(angles= self.angles[angle_idx], src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
 
@@ -401,14 +409,14 @@ class LoDoPaBDataset(Dataset):
         #Create single-back projections
         if self.single_bp:
             single_back_projections = self._generate_single_backprojections(sinogram)
-            sinogram_sparse = noisy_sinogram[:, self.angles_SBP, :] 
+            sinogram_sparse = noisy_sinogram[:, self.indices, :] 
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
             'sparse_sinogram': sinogram_sparse,
             'single_back_projections': single_back_projections}
         
         elif self.sparse_view:
-            sparse_sinogram = noisy_sinogram[:, self.angles_SBP, :]
+            sparse_sinogram = noisy_sinogram[:, self.indices, :]
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 
             'noisy_sinogram': noisy_sinogram, 

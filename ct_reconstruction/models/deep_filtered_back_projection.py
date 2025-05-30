@@ -151,7 +151,8 @@ class DeepFBPNetwork(Module):
         Returns:
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
-
+        print("DEBUG x.shape:", x.shape)
+        
         img = x[0, 0]
         print(f"Shape: {img.shape}, dtype: {img.dtype}")
 

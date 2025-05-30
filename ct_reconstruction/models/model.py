@@ -136,6 +136,7 @@ class ModelBase(Module):
         self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
         self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))     # Fan beam structure
         self.A = ts.operator(self.vg,self.pg)     
+   
 
         if self.sparse_view:
             self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
@@ -150,6 +151,9 @@ class ModelBase(Module):
             angles_sparse = self.angles[self.indices_base] 
             self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
             self.A_sparse = ts.operator(self.vg, self.pg_sparse)
+        else:
+            self.indices_base = torch.arange(self.num_angles)
+        
 
         # accelerator for faster code
         self.accelerator = accelerator

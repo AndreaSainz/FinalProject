@@ -132,6 +132,16 @@ for folder, out_folder_gt, out_folder_ld  in zip(input_folders, output_folders_g
         except Exception as e:
             print(f"Error reading {file}: {e}")
             continue
+        
+        # Extract mode (train/validation/test) and file number from filename
+        base_name = os.path.basename(file)
+        parts = base_name.split('_')
+        if len(parts) < 3:
+            print(f"Unexpected filename format: {base_name}")
+            continue
+        mode = parts[2]  # e.g., 'test' from 'ground_truth_test_000.hdf5'
+        file_num = parts[-1].split('.')[0]  # e.g., '000'
+
 
         # Upsample from 362x362 to 1000x1000 to avoid inverse crime
         images_tensor = torch.tensor(images)
@@ -145,13 +155,9 @@ for folder, out_folder_gt, out_folder_ld  in zip(input_folders, output_folders_g
         # Forward projection to get sinograms (one by one)
         sinograms = torch.stack([A(img) for img in images_upscaled])
 
-        # Extract numeric ID from filename
-        base_name = os.path.basename(file)
-        file_num = ''.join(filter(str.isdigit, base_name))
-        output_path = os.path.join(out_folder_gt, f"ground_truth_{file_num}.hdf5")
-
-        # Save images and corresponding sinograms
-        with h5py.File(output_path, 'w') as out_f:
+        # Save ground truth with sinograms
+        output_path_gt = os.path.join(out_folder_gt, f"ground_truth_{mode}_{file_num}.hdf5")
+        with h5py.File(output_path_gt, 'w') as out_f:
             out_f.create_dataset("data", data=images, compression="gzip")
             out_f.create_dataset("sinograms", data=sinograms, compression="gzip")
 
@@ -166,7 +172,7 @@ for folder, out_folder_gt, out_folder_ld  in zip(input_folders, output_folders_g
         low_dose_sinogram = -torch.log(simulated_photons / N0)/ u_max
 
          # Save images and corresponding simulated low-dose sinograms
-        output_path = os.path.join(out_folder_ld, f"ground_truth_{file_num}.hdf5")
-        with h5py.File(output_path, 'w') as out_f:
+        output_path_ld = os.path.join(out_folder_ld, f"low_dose_{mode}_{file_num}.hdf5")
+        with h5py.File(output_path_ld, 'w') as out_f:
             out_f.create_dataset("data", data=images, compression="gzip")
             out_f.create_dataset("sinograms", data=low_dose_sinogram, compression="gzip")

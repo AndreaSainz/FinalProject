@@ -323,7 +323,7 @@ class LoDoPaBDataset(Dataset):
         self._log(f"[Dataset] Using file path: {file_path}")
         self._log(f"[Dataset] Taking image number: {local_idx}")
 
-        return sample, sino
+        return sample, sino.unsqueeze(0)
 
 
 

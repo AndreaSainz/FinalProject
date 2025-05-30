@@ -118,7 +118,11 @@ class LoDoPaBDataset(Dataset):
 
 
         # Select subset of angles for sparse-view backprojection
-        self.angles_SBP = (self.indices + offset) % self.num_angles
+        if self.indices is None:
+            # Tomar n_single_BP ángulos equidistantes desde offset
+            self.angles_SBP = [(offset + i * (self.num_angles // self.n_single_BP)) % self.num_angles for i in range(self.n_single_BP)]
+        else:
+            self.angles_SBP = (self.indices + self.offset) % self.num_angles
 
         # Prepare list of data files
         self.ground_truth_dir = ground_truth_dir

@@ -165,8 +165,7 @@ class DeepFBPNetwork(Module):
         x = self.learnable_filter(x)
         x = x.squeeze(1)
 
-        
-        plt.imshow(x[0,0].detach().cpu().numpy(), cmap="gray", aspect='auto')
+        plt.imshow(x[0].detach().cpu().numpy(), cmap="gray", aspect='auto')
         plt.title("Sinograma recien Filtrado")
         plt.colorbar()
         plt.show()

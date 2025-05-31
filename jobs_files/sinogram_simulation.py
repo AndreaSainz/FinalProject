@@ -91,7 +91,7 @@ u_max = 81.35858
 
 
 # Create tomosipo volume and projection geometry
-vg = ts.volume(shape=(1, pixels_upsampling, pixels_upsampling),size=(1.0, pixel_size,pixel_size))                                               # Volumen
+vg = ts.volume(shape=(1, pixels, pixels),size=(1.0, pixel_size,pixel_size))                                               # Volumen
 angles = np.linspace(0, np.pi, num_angles, endpoint=True)                                # Angles
 pg = ts.cone(
     angles=angles,

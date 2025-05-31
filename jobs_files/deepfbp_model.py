@@ -30,7 +30,7 @@ max_len_test = 20
 seed = 29072000
 debug = True
 batch_size = 8
-epochs = 5
+epochs = 30
 learning_rate = 1e-3
 scheduler = True
 filter_type = "Filter I"
@@ -45,10 +45,12 @@ model_deepfbp = DeepFBP(model_path, filter_type, sparse_view, view_angles, alpha
 
 # training and validation
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience) #phase 1(only filter)
-epochs = 2
+plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterI_epoch30.png")
+epochs = 15
 learning_rate = 1e-3
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience, epochs, learning_rate, phase=2)
-epochs = 2
+plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterI_epoch45.png")
+epochs = 15
 learning_rate = 1e-4
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience, epochs, learning_rate, phase=3)
 
@@ -62,4 +64,4 @@ results = model_deepfbp.test(training_path, max_len_test)
 model_deepfbp.results("both", 1, figure_path)
 samples = model_deepfbp.results("testing", 5, figure_path)
 model_deepfbp.report_results_images(figure_path, samples)
-plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterI_epoch20.png")
+plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterI_epoch60.png")

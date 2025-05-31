@@ -323,8 +323,7 @@ class LoDoPaBDataset(Dataset):
         # Convert to tensor
         sample = torch.tensor(ground_truth, dtype=torch.float32).unsqueeze(0)
         sino = torch.tensor(sino, dtype=torch.float32)
-        print(f"[Dataset] sino shape: {sino.shape}")
-        print(f"[Dataset] image shape: {sample.shape}")
+        
         self._log(f"[Dataset] Taking file number: {file_number}")
         self._log(f"[Dataset] Using file path: {file_path}")
         self._log(f"[Dataset] Taking image number: {local_idx}")

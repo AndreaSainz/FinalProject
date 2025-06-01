@@ -158,7 +158,6 @@ class DeepFBPNetwork(Module):
 
         plt.imshow(img.detach().cpu().float().numpy(), cmap="gray", aspect='auto')
         plt.title("Sinograma antes del filtrado")
-        plt.colorbar()
         plt.show()
 
         # Apply filter for frequency domain
@@ -167,7 +166,6 @@ class DeepFBPNetwork(Module):
 
         plt.imshow(x[0].detach().cpu().numpy(), cmap="gray", aspect='auto')
         plt.title("Sinograma recien Filtrado")
-        plt.colorbar()
         plt.show()
 
         # Apply "interpolator", is changing the values of the sinogram directly, is more like a denoiser
@@ -180,7 +178,6 @@ class DeepFBPNetwork(Module):
 
         plt.imshow(x[0,0].detach().cpu().numpy(), cmap="gray", aspect='auto')
         plt.title("Sinograma antes de tomosipo")
-        plt.colorbar()
         plt.show()
 
         # A.T() only accepts [1, A, D] so we iterate by batch
@@ -188,7 +185,6 @@ class DeepFBPNetwork(Module):
 
         plt.imshow(images[0, 0].detach().cpu().numpy(), cmap="gray")
         plt.title("Imagen Reconstruida (Backprojection)")
-        plt.colorbar()
         plt.show()
 
         # apply denoiser to the output image

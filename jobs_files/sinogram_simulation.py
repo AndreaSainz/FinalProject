@@ -154,7 +154,7 @@ for folder, out_folder_gt, out_folder_ld  in zip(input_folders, output_folders_g
           images_tensor = images_tensor.unsqueeze(0)  # [1, H, W]
 
         # Forward projection to get sinograms (one by one)
-        sinograms = torch.stack([A(img) for img in images_tensor])
+        sinograms = torch.stack([A(img.unsqueeze(0) if img.ndim == 2 else img) for img in images_tensor])
 
         # Save ground truth with sinograms
         output_path_gt = os.path.join(out_folder_gt, f"ground_truth_{mode}_{file_num}.hdf5")

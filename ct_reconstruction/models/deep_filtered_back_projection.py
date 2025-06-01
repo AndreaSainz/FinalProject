@@ -68,33 +68,12 @@ class DeepFBPNetwork(Module):
 
     def ram_lak_filter(self):
         """
-        Compute the discrete Ram-Lak filter in the spatial domain. This filter corresponds 
-        to the ideal ramp filter :math:`|\omega|` in the frequency domain, commonly used in 
-        Filtered Back Projection (FBP) for CT reconstruction.
-
-        Returns:
-            torch.Tensor: Real-valued frequency domain filter of shape (num_detectors,).
-
-        Notes:
-            This filter is derived from:
-            Kak, A. C., & Slaney, M. (1988). Principles of computerized tomographic imaging.
+        Create the Ram-Lak filter directly in the frequency domain as |ω| over the FFT frequencies.
         """
-        #initilize a vector with all zeros
-        vector = torch.zeros(self.num_detectors)
-
-        #find the center
-        center = self.num_detectors//2
-        vector[center] =1 / (4 * self.num_detectors**2)
-
-        # get all the "negative" odd numbers
-        for i in range(-center,center):
-            if i%2 != 0 and  i!=0:
-                vector[center + i] = -1 / (torch.pi ** 2 * i ** 2)   
-        
-        # the ram-lak filter should be in the frequency domain
-        frecuency_filter = torch.fft.fft(vector)
-
-        return frecuency_filter.real
+        n = self.num_detectors
+        freqs = torch.fft.fftfreq(n)  # Normalized frequency from -0.5 to 0.5
+        ram_lak = torch.abs(freqs)
+        return ram_lak
 
 
     def intermediate_residual_block(self, channels):

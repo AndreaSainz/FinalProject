@@ -404,10 +404,6 @@ class ModelBase(Module):
             opt.zero_grad()
             self.accelerator.backward(loss_value)
             opt.step()
-            for name, param in self.model.named_parameters():
-                if param.requires_grad:
-                    print(f"{name} grad: {param.grad is not None}")
-
 
             # add the loss to the total training loss so far
             total_train_loss += loss_value.item()
@@ -1278,7 +1274,7 @@ class ModelBase(Module):
 
             # calculate de A operator for tomosipo 
             A = self._get_operator()
-            
+
             for i in range(n_samples):
                 gt_image = ground_truths[i][0] if ground_truths[i].dim() == 4 else ground_truths[i]
                 recon_dict = self.other_ct_reconstruction( sinograms[i], A, num_iterations_sirt=num_iterations_sirt, num_iterations_em=num_iterations_em, num_iterations_tv_min=num_iterations_tv_min, num_iterations_nag_ls=num_iterations_nag_ls, lamda=lamda

@@ -91,14 +91,12 @@ u_max = 81.35858
 
 
 # Create tomosipo volume and projection geometry
-vg = ts.volume(shape=(1, pixels, pixels),size=(1.0, pixel_size,pixel_size))                                               # Volumen
+vg = ts.volume(shape=(1, pixels, pixels))                                               # Volumen
 angles = np.linspace(0, np.pi, num_angles, endpoint=True)                                # Angles
 pg = ts.cone(
     angles=angles,
     src_orig_dist=src_orig_dist,
-    src_det_dist=src_det_dist,
-    shape=(1, num_detectors),
-    size=(1.0, pixel_size) 
+    shape=(1, num_detectors)
 )     # Fan beam structure
 A = ts.operator(vg,pg)
 

@@ -133,9 +133,9 @@ class ModelBase(Module):
         self.indices = None
 
         # Create tomosipo volume and projection geometry
-        self.vg = ts.volume(shape=(1,self.pixels,self.pixels), size=(1.0, self.pixel_size,self.pixel_size))                                                       # Volumen
+        self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
         self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
-        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist, src_det_dist=self.src_det_dist, shape=(1, self.num_detectors),size=(1.0,self.pixel_size) )     # Fan beam structure
+        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist,  shape=(1, self.num_detectors) )     # Fan beam structure
         self.A = ts.operator(self.vg,self.pg)     
    
 
@@ -143,7 +143,7 @@ class ModelBase(Module):
             self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
             # so the angles match the subset that was taken from the original angles
             angles_sparse = self.angles[self.indices_base] 
-            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, src_det_dist=self.src_det_dist, shape=(1, self.num_detectors), size=(1.0,self.pixel_size) )
+            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors) )
             self.A_sparse = ts.operator(self.vg, self.pg_sparse)
 
         elif self.single_bp:
@@ -1075,7 +1075,7 @@ class ModelBase(Module):
             return self.A_sparse
         elif (self.single_bp or self.sparse_view) and self.offset != 0:
             angles_sparse = self.angles[self.current_indices]
-            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, src_det_dist=self.src_det_dist, shape=(1, self.num_detectors),size=(1.0,self.pixel_size) )
+            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors) )
             self.A_sparse = ts.operator(self.vg, self.pg_sparse)
             return self.A_sparse
         else:

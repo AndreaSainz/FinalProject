@@ -430,7 +430,7 @@ class ModelBase(Module):
                 fixed_pred = self.model(fixed_input)
                 for i in range(min(number_of_examples, fixed_pred.shape[0])):
                     show_example_epoch(fixed_pred[i], fixed_gt[i], e, f"{save_path}_epochs_{i}")
-                    print(f"[INFO] Saved example figure: {save_path}_epochs_{i}_{e}.png")
+                    self._log(f"[INFO] Saved example figure: {save_path}_epochs_{i}_{e}.png")
                 
         return total_train_loss
 

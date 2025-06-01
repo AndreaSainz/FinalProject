@@ -93,7 +93,6 @@ class DeepFBPNetwork(Module):
         
         # the ram-lak filter should be in the frequency domain
         frecuency_filter = torch.fft.fft(vector)
-        frecuency_filter =  torch.fft.fftshift(frecuency_filter)
 
         return frecuency_filter.real
 
@@ -151,11 +150,7 @@ class DeepFBPNetwork(Module):
         Returns:
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
-        print("DEBUG x.shape:", x.shape)
-        
         img = x[0, 0]
-        print(f"Shape: {img.shape}, dtype: {img.dtype}")
-
         plt.imshow(img.detach().cpu().float().numpy(), cmap="gray", aspect='auto')
         plt.title("Sinograma antes del filtrado")
         plt.show()
@@ -435,14 +430,12 @@ class LearnableFilter(Module):
 
         # convert sinogram to frequency domain
         ftt1d = torch.fft.fft(x, dim=-1)
-        # shifted frequencies
-        ftt1d_shifted = torch.fft.fftshift(ftt1d)
 
         # apply de filter
         if self.per_angle:
-            filtered = ftt1d_shifted * self.weights[None, :, :]
+            filtered = ftt1d * self.weights[None, :, :]
         else:
-            filtered = ftt1d_shifted * self.weights[None, None, :]
+            filtered = ftt1d * self.weights[None, None, :]
         
         # retorn the filtered sinogram 
         return torch.fft.ifft(filtered, dim=-1).real

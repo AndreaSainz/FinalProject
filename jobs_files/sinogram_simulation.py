@@ -1,72 +1,57 @@
 """
-This script simulates full-dose and low-dose sinograms from high-resolution projections of CT images,
-following the data generation methodology described in the paper:
+This script generates full-dose sinograms from CT images using forward projection
+and saves them in HDF5 format for later use in reconstruction tasks.
 
-LoDoPaB-CT: A benchmark dataset for low-dose computed tomography reconstruction
-Scientific Data | (2021) 8:109 | https://doi.org/10.1038/s41597-021-00893-z
-
-Overview:
----------
-The simulation process mirrors the methodology outlined in the original LoDoPaB-CT dataset paper,
-ensuring consistency with its assumptions and avoiding common problems like the inverse crime.
-
-Steps performed:
+Important Notes:
 ----------------
+Although the original LoDoPaB-CT paper suggests simulating projections from higher-resolution
+images (e.g., 1000×1000) to avoid the *inverse crime*, this implementation skips that step
+due to empirical issues observed during reconstruction (poor sinogram quality or instabilities).
 
-1. **Image Upsampling**:
-   - Ground truth CT images are originally sized at 362×362 pixels.
-   - To avoid the *inverse crime* (i.e., using the same discretization for simulation and reconstruction),
-     the images are upsampled to 1000×1000 using bilinear interpolation.
-   - This ensures that the reconstruction task is based on a different resolution than the simulation.
+Instead, sinograms are generated directly from 362×362 CT images using tomosipo's fan-beam geometry.
+The low-dose effect will be simulated later during training by applying strong Poisson noise.
 
-2. **Forward Projection (Ray Transform)**:
-   - The upsampled images are projected using tomosipo’s fan-beam operator (`ts.cone`) to simulate the
-     continuous X-ray transform (analogous to the Radon transform in 2D).
-   - This generates clean, full-dose sinograms.
+Summary of Process:
+-------------------
 
-3. **Full-dose Output**:
-   - The original ground truth image (362×362) and the corresponding clean sinogram are saved
-     in the `ground_truth_*` folders.
+1. **Input Loading**:
+   - Ground truth CT slices of size 362×362 are loaded from preprocessed HDF5 files.
 
-4. **Low-dose Simulation (Poisson noise model)**:
-   - Simulates reduced photon counts using a Poisson process:
-       photons ~ Poisson(N₀ * exp(-Ax))
-   - N₀ is set to 4096, matching the setup in the original paper for low-dose acquisition.
-   - Photon counts of zero are clipped to a minimum of 0.1 to avoid issues in the log-domain.
-   - The logarithmic measurement is computed using the Beer–Lambert law:
-       y = -log(photons / N₀)
-   - Finally, the log-transformed sinogram is normalized by dividing by μ_max = 81.35858,
-     which ensures consistency with the normalization of ground truth images into the [0, 1] range.
+2. **Forward Projection**:
+   - Each image is projected using tomosipo’s `ts.cone` operator (fan-beam geometry)
+     to simulate clean (noise-free) sinograms.
+   - No upsampling or resolution change is performed — images are projected at their native resolution.
 
-5. **Low-dose Output**:
-   - The same ground truth image (362×362) and the simulated low-dose sinogram are saved
-     in the `observation_*` folders.
+3. **Saving Output**:
+   - Each output HDF5 file contains:
+       - `"data"`: the original CT slice.
+       - `"sinograms"`: the corresponding full-dose, clean sinogram (`Ax`).
 
-Output structure:
------------------
-Each HDF5 file written contains two datasets:
-  - `data`: the ground truth CT image (shape: [362, 362])
-  - `sinograms`: either the full-dose or low-dose sinogram (shape: [num_angles, num_detectors])
+4. **Low-dose Simulation (deferred)**:
+   - No Poisson or Gaussian noise is added in this script.
+   - Low-dose conditions will be simulated **on-the-fly during training** by applying Poisson noise
+     with low photon counts (e.g., `i_0 = 1e3`) directly to these sinograms.
+   - No normalization by `μ_max` is performed, as it is no longer relevant in this noise model.
 
-Folder structure (after running the script for all dataset splits):
+Directory Structure:
+--------------------
+This script generates files into the following structure:
+
   project_root/
-  ├── data_sino/
-  │   ├── ground_truth_train/
-  │   ├── ground_truth_validation/
-  │   ├── ground_truth_test/
-  │   ├── observation_train/
-  │   ├── observation_validation/
-  │   └── observation_test/
+  └── data_sino/
+      ├── ground_truth_train/
+      ├── ground_truth_validation/
+      └── ground_truth_test/
 
-Notes:
-------
-- The sinograms are generated using tomosipo’s fan-beam geometry via `ts.cone`, which corresponds
-  to a 2D fan-beam CT system.
-- This pipeline uses the CPU backend (`astra_cpu`) in the referenced paper due to numerical inaccuracies
-  reported with `astra_cuda` at specific angles and detector positions. However, GPU backends can be used
-  here for performance if validated.
-- μ_max and the minimum photon count threshold (0.1) are critical for stable log-transforms and are applied
-  as described in the original publication.
+Each output HDF5 file contains two datasets:
+  - `data`: Ground truth CT image (shape: [362, 362])
+  - `sinograms`: Clean sinogram (shape: [num_angles, num_detectors])
+
+Technical Notes:
+----------------
+- Uses tomosipo’s `ts.cone` with 1000 projection angles and 513 detectors.
+- Fan-beam parameters are based on the LoDoPaB-CT setup (src_orig_dist=575, src_det_dist=1050).
+- GPU backends can be used for acceleration if tomosipo is properly configured.
 """
 
 import os
@@ -75,7 +60,6 @@ import numpy as np
 import tomosipo as ts
 from tqdm import tqdm
 import torch
-from torch.nn.functional import interpolate
 from glob import glob
 
 #Scan parameters from the paper and data
@@ -115,18 +99,10 @@ output_folders_gt = [
     "/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_test"
 ]
 
-output_folders_ld = [
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/observation_train",
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/observation_validation",
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/observation_test"
-]
-
-
 # Loop through folders and process each file
-for folder, out_folder_gt, out_folder_ld  in zip(input_folders, output_folders_gt, output_folders_ld):
+for folder, out_folder_gt in zip(input_folders, output_folders_gt):
      # make sure the output directories exists
     os.makedirs(out_folder_gt, exist_ok=True)  
-    os.makedirs(out_folder_ld, exist_ok=True)
 
     files = glob(os.path.join(folder, '*.hdf5'))
 
@@ -159,19 +135,3 @@ for folder, out_folder_gt, out_folder_ld  in zip(input_folders, output_folders_g
         with h5py.File(output_path_gt, 'w') as out_f:
             out_f.create_dataset("data", data=images, compression="gzip")
             out_f.create_dataset("sinograms", data=sinograms, compression="gzip")
-
-        # now we need to simulate the low-dose sinograms
-        sinograms = sinograms.float()
-        simulated_photons = torch.poisson( N0 * torch.exp(-sinograms))
-
-        # maximum between pixel and 0.1, taken pixel-wise
-        simulated_photons = torch.clamp(simulated_photons, min=0.1)
-
-        # Convert back to log domain (using Beer–Lambert Law) and divide by u_max (for images in range [0-1])
-        low_dose_sinogram = -torch.log(simulated_photons / N0)/ u_max
-
-         # Save images and corresponding simulated low-dose sinograms
-        output_path_ld = os.path.join(out_folder_ld, f"low_dose_{mode}_{file_num}.hdf5")
-        with h5py.File(output_path_ld, 'w') as out_f:
-            out_f.create_dataset("data", data=images, compression="gzip")
-            out_f.create_dataset("sinograms", data=low_dose_sinogram, compression="gzip")

@@ -1241,14 +1241,7 @@ class ModelBase(Module):
                 else:
                     sino = batch['noisy_sinogram']
 
-                recon_dict = self.other_ct_reconstruction(
-                sino,
-                A,
-                num_iterations_sirt=num_iterations_sirt,
-                num_iterations_em=num_iterations_em,
-                num_iterations_tv_min=num_iterations_tv_min,
-                num_iterations_nag_ls=num_iterations_nag_ls,
-                lamda=lamda)
+                recon_dict = self.other_ct_reconstruction(sino, A, num_iterations_sirt=num_iterations_sirt, num_iterations_em=num_iterations_em, num_iterations_tv_min=num_iterations_tv_min, num_iterations_nag_ls=num_iterations_nag_ls, lamda=lamda)
 
                 metrics["PSNR"][0] += compute_psnr_results(recon_dict["fbp"], ground_truth, self.alpha)
                 metrics["PSNR"][1] += compute_psnr_results(recon_dict["sirt"], ground_truth, self.alpha)
@@ -1283,15 +1276,12 @@ class ModelBase(Module):
                 sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
             n_samples = len(sinograms)
 
+            # calculate de A operator for tomosipo 
+            A = self._get_operator()
+            
             for i in range(n_samples):
                 gt_image = ground_truths[i][0] if ground_truths[i].dim() == 4 else ground_truths[i]
-                recon_dict = self.other_ct_reconstruction(
-                    sinograms[i],
-                    num_iterations_sirt=num_iterations_sirt,
-                    num_iterations_em=num_iterations_em,
-                    num_iterations_tv_min=num_iterations_tv_min,
-                    num_iterations_nag_ls=num_iterations_nag_ls,
-                    lamda=lamda
+                recon_dict = self.other_ct_reconstruction( sinograms[i], A, num_iterations_sirt=num_iterations_sirt, num_iterations_em=num_iterations_em, num_iterations_tv_min=num_iterations_tv_min, num_iterations_nag_ls=num_iterations_nag_ls, lamda=lamda
                 )
 
                 metrics["PSNR"][0] += compute_psnr_results(recon_dict["fbp"], gt_image, self.alpha)

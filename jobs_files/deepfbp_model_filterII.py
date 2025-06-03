@@ -30,11 +30,11 @@ max_len_test = 20
 seed = 29072000
 debug = True
 batch_size = 8
-epochs = 30
+epochs = 5
 learning_rate = 1e-3
 scheduler = True
 filter_type = "Filter II"
-patience = 10
+patience = 15
 model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/deepfbp_training_try_filterII"
 log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/deepfbp_training_try_filterII.log"
 figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII"
@@ -42,15 +42,18 @@ figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures
 
 # define model arquitecture
 model_deepfbp = DeepFBP(model_path, filter_type, sparse_view, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file)
-plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_initial")
+plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_0_initial")
+plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=500, angle = 90, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_initial")
 # training and validation
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience) #phase 1(only filter)
-plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_epoch30")
-epochs = 10
+plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_0_epoch5")
+plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=500, angle = 90, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_90_epoch5")
+epochs = 3
 learning_rate = 1e-3
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience, epochs, learning_rate, phase=2)
-plot_learned_filter(model_deepfbp.model.learnable_filter,angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_epoch40")
-epochs = 10
+plot_learned_filter(model_deepfbp.model.learnable_filter,angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_0_epoch8")
+plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=500, angle = 90, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_90_epoch8")
+epochs = 3
 learning_rate = 1e-4
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience, epochs, learning_rate, phase=3)
 
@@ -64,5 +67,7 @@ results = model_deepfbp.test(training_path, max_len_test)
 model_deepfbp.results("both", 1, figure_path)
 samples = model_deepfbp.results("testing", 5, figure_path)
 model_deepfbp.report_results_images(figure_path, samples)
-
-plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_epoch50")
+model_deepfbp.report_results_table(figure_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,
+                         num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False)
+plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_0_epoch11")
+plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=500, angle = 90, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_90_epoch11")

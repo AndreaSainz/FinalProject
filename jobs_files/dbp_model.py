@@ -11,25 +11,25 @@ test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground
 
 
 # define parameters
-n_single_BP = 16
+n_single_BP = 90
 alpha = 0.297807 #percentile 95
 i_0 = 100000
 sigma = 0.001
-max_len_train = 10
-max_len_val = 2
-max_len_test = 2
+max_len_train = 5000
+max_len_val = 600
+max_len_test = 600
 seed = 29072000
 debug = True
 batch_size = 5
-epochs = 3
+epochs = 50
 learning_rate = 1e-3
 scheduler = True
 patience = 10
 
 
-model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_16_views_training_try"
-log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_16_views_training_try.log"
-figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_16_views_training_try"
+model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_16_views_training_50000"
+log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_16_views_training_50000.log"
+figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_16_views_training_50000"
 
 # define model arquitecture
 model_dbp = DBP(model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file)
@@ -47,3 +47,5 @@ results = model_dbp.test(training_path, max_len_test)
 model_dbp.results("both", 1, figure_path)
 samples = model_dbp.results("testing", 5, figure_path)
 model_dbp.report_results_images(figure_path, samples)
+model_dbp.report_results_table(figure_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,
+                         num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False)

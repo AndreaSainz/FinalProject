@@ -71,7 +71,7 @@ class DeepFBPNetwork(Module):
         Create the Ram-Lak filter directly in the frequency domain as |ω| over the FFT frequencies.
         """
         n = self.num_detectors
-        freqs = torch.fft.fftfreq(n)  # Normalized frequency from -0.5 to 0.5
+        freqs = torch.fft.fftfreq(n) * 2  # Normalized frequency from -1 to 1
         ram_lak = torch.abs(freqs)
         return ram_lak
 

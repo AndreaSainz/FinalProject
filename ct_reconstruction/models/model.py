@@ -488,8 +488,8 @@ class ModelBase(Module):
                 else:
                     mse_val = mse_fn(pred, ground_truth).item()
 
-                total_psnr += compute_psnr(mse_val, self.alpha)
-                total_ssim += compute_ssim(pred, ground_truth, self.alpha)
+                total_psnr += compute_psnr(mse_val, 1)
+                total_ssim += compute_ssim(pred, ground_truth, 1)
 
                  #Clean memory
                 if batch_id == 10:
@@ -796,8 +796,8 @@ class ModelBase(Module):
                 else:
                     mse_val = mse_fn(pred, ground_truth).item()
 
-                total_psnr += compute_psnr(mse_val, self.alpha)
-                total_ssim += compute_ssim(pred, ground_truth, self.alpha)
+                total_psnr += compute_psnr(mse_val, 1)
+                total_ssim += compute_ssim(pred, ground_truth, 1)
 
                 # save gound truth and prediction
                 predictions.append(pred.cpu())
@@ -1239,17 +1239,17 @@ class ModelBase(Module):
 
                 recon_dict = self.other_ct_reconstruction(sino, A, num_iterations_sirt=num_iterations_sirt, num_iterations_em=num_iterations_em, num_iterations_tv_min=num_iterations_tv_min, num_iterations_nag_ls=num_iterations_nag_ls, lamda=lamda)
 
-                metrics["PSNR"][0] += compute_psnr_results(recon_dict["fbp"], ground_truth, self.alpha)
-                metrics["PSNR"][1] += compute_psnr_results(recon_dict["sirt"], ground_truth, self.alpha)
-                metrics["PSNR"][2] += compute_psnr_results(recon_dict["em"], ground_truth, self.alpha)
-                metrics["PSNR"][3] += compute_psnr_results(recon_dict["tv_min"], ground_truth, self.alpha)
-                metrics["PSNR"][4] += compute_psnr_results(recon_dict["nag_ls"], ground_truth, self.alpha)
+                metrics["PSNR"][0] += compute_psnr_results(recon_dict["fbp"], ground_truth, 1)
+                metrics["PSNR"][1] += compute_psnr_results(recon_dict["sirt"], ground_truth, 1)
+                metrics["PSNR"][2] += compute_psnr_results(recon_dict["em"], ground_truth, 1)
+                metrics["PSNR"][3] += compute_psnr_results(recon_dict["tv_min"], ground_truth, 1)
+                metrics["PSNR"][4] += compute_psnr_results(recon_dict["nag_ls"], ground_truth, 1)
 
-                metrics["SSIM"][0] += compute_ssim(recon_dict["fbp"], ground_truth, self.alpha)
-                metrics["SSIM"][1] += compute_ssim(recon_dict["sirt"], ground_truth, self.alpha)
-                metrics["SSIM"][2] += compute_ssim(recon_dict["em"], ground_truth, self.alpha)
-                metrics["SSIM"][3] += compute_ssim(recon_dict["tv_min"], ground_truth, self.alpha)
-                metrics["SSIM"][4] += compute_ssim(recon_dict["nag_ls"], ground_truth, self.alpha)
+                metrics["SSIM"][0] += compute_ssim(recon_dict["fbp"], ground_truth, 1)
+                metrics["SSIM"][1] += compute_ssim(recon_dict["sirt"], ground_truth, 1)
+                metrics["SSIM"][2] += compute_ssim(recon_dict["em"], ground_truth, 1)
+                metrics["SSIM"][3] += compute_ssim(recon_dict["tv_min"], ground_truth, 1)
+                metrics["SSIM"][4] += compute_ssim(recon_dict["nag_ls"], ground_truth, 1)
 
 
         else:
@@ -1280,17 +1280,17 @@ class ModelBase(Module):
                 recon_dict = self.other_ct_reconstruction( sinograms[i], A, num_iterations_sirt=num_iterations_sirt, num_iterations_em=num_iterations_em, num_iterations_tv_min=num_iterations_tv_min, num_iterations_nag_ls=num_iterations_nag_ls, lamda=lamda
                 )
 
-                metrics["PSNR"][0] += compute_psnr_results(recon_dict["fbp"], gt_image, self.alpha)
-                metrics["PSNR"][1] += compute_psnr_results(recon_dict["sirt"], gt_image, self.alpha)
-                metrics["PSNR"][2] += compute_psnr_results(recon_dict["em"], gt_image, self.alpha)
-                metrics["PSNR"][3] += compute_psnr_results(recon_dict["tv_min"], gt_image, self.alpha)
-                metrics["PSNR"][4] += compute_psnr_results(recon_dict["nag_ls"], gt_image, self.alpha)
+                metrics["PSNR"][0] += compute_psnr_results(recon_dict["fbp"], gt_image, 1)
+                metrics["PSNR"][1] += compute_psnr_results(recon_dict["sirt"], gt_image, 1)
+                metrics["PSNR"][2] += compute_psnr_results(recon_dict["em"], gt_image, 1)
+                metrics["PSNR"][3] += compute_psnr_results(recon_dict["tv_min"], gt_image, 1)
+                metrics["PSNR"][4] += compute_psnr_results(recon_dict["nag_ls"], gt_image, 1)
 
-                metrics["SSIM"][0] += compute_ssim(recon_dict["fbp"], gt_image, self.alpha)
-                metrics["SSIM"][1] += compute_ssim(recon_dict["sirt"], gt_image, self.alpha)
-                metrics["SSIM"][2] += compute_ssim(recon_dict["em"], gt_image, self.alpha)
-                metrics["SSIM"][3] += compute_ssim(recon_dict["tv_min"], gt_image, self.alpha)
-                metrics["SSIM"][4] += compute_ssim(recon_dict["nag_ls"], gt_image, self.alpha)
+                metrics["SSIM"][0] += compute_ssim(recon_dict["fbp"], gt_image, 1)
+                metrics["SSIM"][1] += compute_ssim(recon_dict["sirt"], gt_image, 1)
+                metrics["SSIM"][2] += compute_ssim(recon_dict["em"], gt_image, 1)
+                metrics["SSIM"][3] += compute_ssim(recon_dict["tv_min"], gt_image, 1)
+                metrics["SSIM"][4] += compute_ssim(recon_dict["nag_ls"], gt_image, 1)
 
         # Average metrics
         metrics["PSNR"] = [val / n_samples for val in metrics["PSNR"]]

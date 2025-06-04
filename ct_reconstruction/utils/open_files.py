@@ -120,5 +120,6 @@ def load_model_from_config(config_path, debug):
 
     # initilize the model
     model = ModelClass(**config)
+    model.trained = True
 
     return model

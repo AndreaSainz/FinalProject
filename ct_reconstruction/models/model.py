@@ -557,7 +557,7 @@ class ModelBase(Module):
             sample = next(iter(train_dataloader))["sparse_sinogram"]
         else:
             sample = next(iter(train_dataloader))["noisy_sinogram"]
-        #summary(self.model, input_size=tuple(sample.shape[1:])) #just for debugging
+        summary(self.model, input_size=tuple(sample.shape[1:])) #just for debugging
 
         # confirmation for the model to be train 
         if confirm_train:
@@ -1157,7 +1157,7 @@ class ModelBase(Module):
         elif not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
             self._log("Ground truth .pt files not found", level="error")
             return
-        elif not self.sparse_view and not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
+        elif not (self.sparse_view or self.single_bp) and not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
             self._log("Noisy sinograms .pt files not found", level="error")
             return
         elif (self.sparse_view or self.single_bp) and not os.path.exists(f"{self.model_path}_sparse_sinograms.pt"):
@@ -1257,16 +1257,16 @@ class ModelBase(Module):
             if not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
                 self._log("Ground truth .pt files not found", level="error")
                 return
-            if not self.sparse_view and not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
+            if not  (self.sparse_view or self.single_bp) and not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
                 self._log("Noisy sinograms .pt files not found", level="error")
                 return
-            if self.sparse_view and not os.path.exists(f"{self.model_path}_sparse_sinograms.pt"):
+            if  (self.sparse_view or self.single_bp) and not os.path.exists(f"{self.model_path}_sparse_sinograms.pt"):
                 self._log("Sparse-view sinograms .pt files not found", level="error")
                 return
             
             # Load data
             ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
-            if self.sparse_view:
+            if self.sparse_view or self.single_bp:
                 sinograms = torch.load(f"{self.model_path}_sparse_sinograms.pt")
             else:
                 sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")

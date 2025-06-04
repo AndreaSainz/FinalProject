@@ -101,16 +101,10 @@ class DeepFBPNetwork(Module):
         Returns:
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
-        plt.imshow(x[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
-        plt.title("Sinograma inicial")
-        plt.savefig(f"debug_images_Sinograma_inicial.png")
-
+        
         # Apply filter for frequency domain
         x1 = self.learnable_filter(x)
-        plt.imshow(x1[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
-        plt.title("Sinograma filtrado")
-        plt.savefig(f"debug_images_Sinograma_filtrado.png")
-
+        
         x1 = x1.squeeze(1)
         # Supón que x1: [B, A, D]
         x1 = x1.reshape(-1, 1, self.num_detectors)  # [B*A, 1, D]
@@ -124,16 +118,8 @@ class DeepFBPNetwork(Module):
         x5 = x5.view(-1, self.num_angles_modulo, self.num_detectors)
         x5 = x5.unsqueeze(1)               # [B, 1, A, D]
 
-        plt.imshow(x5[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
-        plt.title("Sinograma interpolador")
-        plt.savefig(f"debug_images_Sinograma_interpolado.png")
-
         # A.T() only accepts [1, A, D] so we iterate by batch
         images = self.AT(x5)  
-
-        plt.imshow(images[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
-        plt.title("Imagen Tomosipo")
-        plt.show()
 
         # apply denoiser to the output image
         x6 = self.denoising_conv_1(images)
@@ -141,13 +127,6 @@ class DeepFBPNetwork(Module):
         x8 = self.denoising_res_2(x7)
         x9 = self.denoising_res_3(x8)
         x10 = self.denoising_conv_2(x9)
-
-        plt.imshow(x10[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
-        plt.title("Imagen denoiser")
-        plt.savefig(f"debug_images_Sinograma_denoiser.png")
-        return x10
-
-
 
 class intermediate_residual_block(Module):
     """

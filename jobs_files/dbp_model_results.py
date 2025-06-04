@@ -1,5 +1,6 @@
 from ct_reconstruction.models.deep_back_projection import DBP
 from accelerate import Accelerator
+from ct_reconstruction.utils.open_files import load_model_from_config
 
 accelerator = Accelerator()
 
@@ -30,20 +31,8 @@ model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_90_v
 log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_90_views_training_1000.log"
 figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_90_views_training_1000"
 
-# define model arquitecture
-model_dbp = DBP(model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file)
+model_dbp= load_model_from_config(model_path, True)
 
-# training and validation
-history = model_dbp.train(training_path, validation_path, figure_path, max_len_train, max_len_val, patience)
-
-# saving model configuration
-model_dbp.save_config()
-
-#testing model
-results = model_dbp.test(training_path, max_len_test)
-
-#getting plots and results
-model_dbp.results("both", 1, figure_path)
 samples = model_dbp.results("testing", 5, figure_path)
 model_dbp.report_results_images(figure_path, samples)
 model_dbp.report_results_table(figure_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,

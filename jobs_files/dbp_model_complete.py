@@ -14,21 +14,21 @@ n_single_BP = 90
 alpha = 1
 i_0 = 100000
 sigma = 0.001
-max_len_train = 10
-max_len_val = 1
-max_len_test = 1
+max_len_train = 1000
+max_len_val = 120
+max_len_test = 120
 seed = 29072000
 debug = True
 batch_size = 5
-epochs = 2
+epochs = 25
 learning_rate = 1e-3
 scheduler = True
 patience = 10
 
 
-model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_90_views_training_10"
-log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_90_views_training_10.log"
-figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_90_views_training_10"
+model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_90_views_training_1000"
+log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_90_views_training_1000.log"
+figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_90_views_training_1000"
 
 # define model arquitecture
 model_dbp = DBP(model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file)

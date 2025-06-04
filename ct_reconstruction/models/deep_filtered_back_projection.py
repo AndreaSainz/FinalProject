@@ -128,6 +128,9 @@ class DeepFBPNetwork(Module):
         x9 = self.denoising_res_3(x8)
         x10 = self.denoising_conv_2(x9)
 
+        return x10
+
+
 class intermediate_residual_block(Module):
     """
     Create a depthwise 1D residual convolutional block for interpolation.

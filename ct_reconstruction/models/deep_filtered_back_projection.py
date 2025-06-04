@@ -69,9 +69,13 @@ class DeepFBPNetwork(Module):
         """
         Create the Ram-Lak filter directly in the frequency domain as |ω| over the FFT frequencies.
         """
-        n = self.num_detectors
-        freqs = torch.fft.fftfreq(n) * 2  # Normalized frequency from -1 to 1
-        ram_lak = torch.abs(freqs)
+        delta_r = self.pixel_size / (self.num_detectors - 1)   # cm por detector
+        freqs = torch.fft.fftfreq(self.num_detectors, d=delta_r)  # ciclos/cm
+        omega = 2 * torch.pi * freqs          # rad/cm
+
+        ram_lak = torch.abs(omega)           # |ω| en rad/cm
+
+        self.freqs_rad_cm = omega
         return ram_lak
 
 
@@ -95,9 +99,16 @@ class DeepFBPNetwork(Module):
         Returns:
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
+        plt.imshow(x[0,0], aspect='auto', cmap='gray')
+        plt.title("Sinograma inicial")
+        plt.show()
 
         # Apply filter for frequency domain
         x1 = self.learnable_filter(x)
+        plt.imshow(x1[0,0], aspect='auto', cmap='gray')
+        plt.title("Sinograma filtrado")
+        plt.show()
+
         x1 = x1.squeeze(1)
 
 
@@ -109,8 +120,16 @@ class DeepFBPNetwork(Module):
 
         x5 = x5.unsqueeze(1)               # [B, 1, A, D]
 
+        plt.imshow(x5[0,0], aspect='auto', cmap='gray')
+        plt.title("Sinograma interpolador")
+        plt.show()
+
         # A.T() only accepts [1, A, D] so we iterate by batch
         images = self.AT(x5)  
+
+        plt.imshow(images[0,0], aspect='auto', cmap='gray')
+        plt.title("Imagen Tomosipo")
+        plt.show()
 
         # apply denoiser to the output image
         x6 = self.denoising_conv_1(images)
@@ -118,6 +137,10 @@ class DeepFBPNetwork(Module):
         x8 = self.denoising_res_2(x7)
         x9 = self.denoising_res_3(x8)
         x10 = self.denoising_conv_2(x9)
+
+        plt.imshow(x10[0,0], aspect='auto', cmap='gray')
+        plt.title("Imagen denoiser")
+        plt.show()
         return x10
 
 

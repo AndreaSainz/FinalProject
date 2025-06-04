@@ -1,54 +1,65 @@
 """
 Analyze Ground Truth Image Intensity Distribution for LoDoPaB-CT Dataset
 
-This script scans all `.hdf5` files across the train, validation, and test splits of the LoDoPaB-CT dataset,
-extracts all CT image slices, flattens them, and analyzes the global intensity distribution.
+This script analyzes the intensity distribution of all ground truth CT images in the LoDoPaB-CT dataset.
+It processes `.hdf5` files across the training, validation, and test splits to:
 
-Its primary goal is to validate that the images have been correctly normalized using a scaling factor `μ_max`,
-as described in the original LoDoPaB-CT paper:
+    - Extract all CT image slices.
+    - Flatten and concatenate all pixel intensities.
+    - Compute the global intensity histogram.
+    - Calculate the 95th percentile of all pixel values.
+    - Analyze the distribution of per-image maximum values.
+
+-----------------
+Motivation:
+-----------------
+As described in the LoDoPaB-CT paper:
 
     "LoDoPaB-CT: A Benchmark Dataset for Low-Dose Computed Tomography Reconstruction"
     - Leuschner et al., 2021
 
-According to the paper, images were originally normalized by `μ_max = 81.35858` so that pixel values should 
-lie approximately in the range [0, 1]. This normalization is essential for:
-    - consistent training behavior across neural networks
-    - physically meaningful loss values
-    - stable visualization and interpretability
+CT images are normalized by a global constant `μ_max = 81.35858`, resulting in most pixel intensities 
+falling in the range [0, 1]. This normalization is essential for:
+
+    - consistent training of deep learning models
+    - numerically meaningful loss values
+    - standardized and interpretable image visualization
 
 -----------------
-Expected outcome:
+Observed Results:
 -----------------
-If normalization was applied correctly, the intensity histogram should show that most image pixels lie within
-[0, 1]. The 95th percentile should fall slightly below 1.
+Global pixel intensity statistics:
+    - Percentile 95, all values: **0.297807**
+
+Per-image maximum intensity statistics:
+    - Global maximum: 1.0000
+    - Global minimum: 0.0000
+    - Mean: 0.6462
+    - Median: 0.5937
+    - 90th percentile: 0.9828
+    - Number of images with max > 0.9: 5588
+    - Number of images with max < 0.3: 113
 
 -----------------
-Observed result:
+Conclusion:
 -----------------
-In this analysis, we found:
-    Percentile 95: 0.297807
+The results confirm that:
+    - The majority of image pixel intensities lie within [0, 1], as expected.
+    - Most individual images have maximum values close to 1.
+    - Only a very small fraction of images have very low maximums (< 0.3).
 
-This confirms that most pixel values are within the expected range, but skewed toward the lower end of the 
-interval [0, 1].
-
------------------
-Implication:
------------------
-To ensure stable training and avoid vanishing gradients due to very small intensity ranges (e.g., many values 
-concentrated in [0, 0.3]), we will use the 95th percentile value as a global scaling factor (`alpha = 0.297807`)
-in our dataset loader.
-
-This preserves the **relative physical meaning** of intensities while ensuring:
-    - image and sinogram values are rescaled to roughly [0, 1]
-    - losses remain numerically significant
-    - plotting remains standardized with `vmin=0`, `vmax=1`
+Therefore, **no further rescaling is needed**. We will use a global scaling factor `alpha = 1`, preserving:
+    - the relative and physical integrity of the data
+    - training stability and loss interpretability
+    - consistent visualization with `vmin=0`, `vmax=1`
 
 -----------------
-Output:
+Outputs:
 -----------------
-- Logs the 95th percentile value.
-- Saves a histogram plot (`image_distribucion.png`) showing the global intensity distribution.
-
+- Prints summary statistics and percentile values.
+- Saves:
+    - `images_distribucion.png`: Histogram of all pixel values with 95th percentile marked.
+    - `maxima_images.png`: Histogram of per-image maximum values with median and 90th percentile markers.
 """
 
 import os
@@ -57,42 +68,70 @@ import numpy as np
 import matplotlib.pyplot as plt
 from glob import glob
 
-# Rutas a las tres carpetas que contienen archivos .hdf5
-carpetas = [
+# path to the folders with the ground truth images
+folders = [
     "/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_train",
     "/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_validation",
     "/home/as3628/rds/hpc-work/final_project_dis/as3628/data/ground_truth_test"
 ]
 
-# Almacena todos los valores de todas las imágenes
-valores = []
+# store all values from images and the maxima
+values = []
+maxima = []
 
-# Recorre las carpetas y procesa los archivos hdf5
-for carpeta in carpetas:
-    archivos = glob(os.path.join(carpeta, '*.hdf5'))
+# read and process all files
+for folder in folders:
+    files = glob(os.path.join(folder, '*.hdf5'))
 
-    for archivo in archivos:
+    for file in files:
         try:
-            with h5py.File(archivo, 'r') as f:
-                imagenes = f["data"][:]
-                valores.append(imagenes.flatten())
+            with h5py.File(file, 'r') as f:
+                images = f["data"][:]
+                values.append(images.flatten())
+                for img in images:
+                    max_val = np.max(img)
+                    maxima.append(max_val)
         except Exception as e:
-            print(f"Error reading {archivo}: {e}")
+            print(f"Error reading {file}: {e}")
 
 # Concatenar todos los valores en un único array
-todos_los_valores = np.concatenate(valores)
+maxima = np.array(maxima)
+all_values = np.concatenate(values)
 
-# Calcular percentiles para análisis
-percentil_95 = np.percentile(todos_los_valores, 95)
+# calculate percentiles for all values
+percentil_95_all = np.percentile(all_values, 95)
 
-print(f'\n Percentile 95: {percentil_95:.6f}')
+print(f'\n Percentile 95, all values: {percentil_95_all:.6f}')
 
 # (Opcional) Visualizar histograma de intensidades
-plt.hist(todos_los_valores, bins=500, log=True)
-plt.axvline(percentil_95, color='r', linestyle='--', label='percentile 95')
+plt.hist(all_values, bins=500, log=True)
+plt.axvline(percentil_95_all, color='r', linestyle='--', label='percentile 95')
 plt.title('Image values distribution')
 plt.xlabel('Intensities')
 plt.ylabel('Frecuency (log)')
 plt.legend()
-plt.savefig(f"image_distribucion.png")
+plt.savefig(f"images_distribucion.png")
+plt.close()
+
+
+# Analyze per-image maxima
+print("\n-- Statistics of per-image maxima --")
+print(f"Global maximum: {np.max(maxima):.4f}")
+print(f"Global minimum: {np.min(maxima):.4f}")
+print(f"Mean: {np.mean(maxima):.4f}")
+print(f"Median: {np.median(maxima):.4f}")
+print(f"90th percentile: {np.percentile(maxima, 90):.4f}")
+print(f"Images with max > 0.9: {(maxima > 0.9).sum()}")
+print(f"Images with max < 0.3: {(maxima < 0.3).sum()}")
+
+# Plot histogram of per-image maxima
+plt.hist(maxima, bins=100)
+plt.axvline(np.median(maxima), color='g', linestyle='--', label='Median')
+plt.axvline(np.percentile(maxima, 90), color='r', linestyle='--', label='90th percentile')
+plt.title("Distribution of per-image maximum values")
+plt.xlabel("Maximum value (per image)")
+plt.ylabel("Frequency")
+plt.legend()
+plt.tight_layout()
+plt.savefig("maxima_images.png")
 plt.close()

@@ -2,15 +2,13 @@ from ct_reconstruction.models.deep_filtered_back_projection import DeepFBP
 from accelerate import Accelerator
 import torch
 from ct_reconstruction.utils.plotting import plot_learned_filter
+import time
 
 accelerator = Accelerator()
 
-# Mostrar el dispositivo que está utilizando
-print("Dispositivo en uso:", accelerator.device)
+start_time = time.time()
+print(f"[INFO] Script started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-# Mostrar cuántas GPUs están disponibles
-num_gpus = torch.cuda.device_count()
-print("Número de GPUs disponibles:", num_gpus)
 
 # training, validation and testing paths
 training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_train'
@@ -21,7 +19,7 @@ test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground
 n_single_BP = 16
 sparse_view = False
 view_angles = 90
-alpha = 0.297807 #percentile 95
+alpha = 1
 i_0 = 100000
 sigma = 0.001
 max_len_train = 500
@@ -30,7 +28,7 @@ max_len_test = 200
 seed = 29072000
 debug = True
 batch_size = 8
-epochs = 50
+epochs = 25
 learning_rate = 1e-3
 scheduler = True
 filter_type = "Filter I"
@@ -45,12 +43,12 @@ model_deepfbp = DeepFBP(model_path, filter_type, sparse_view, view_angles, alpha
 plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_500_filterI_initial")
 # training and validation
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience) #phase 1(only filter)
-plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_500_filterI_epoch50")
-epochs = 30
+plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_500_filterI_epoch25")
+epochs = 10
 learning_rate = 1e-3
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience, epochs, learning_rate, phase=2)
-plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_500_filterI_epoch80")
-epochs = 30
+plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_500_filterI_epoch35")
+epochs = 10
 learning_rate = 1e-4
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience, epochs, learning_rate, phase=3)
 
@@ -66,4 +64,9 @@ samples = model_deepfbp.results("testing", 5, figure_path)
 model_deepfbp.report_results_images(figure_path, samples)
 model_deepfbp.report_results_table(figure_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,
                          num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False)
-plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_500_filterI_epoch110")
+plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_500_filterI_epoch45")
+
+end_time = time.time()
+elapsed = end_time - start_time
+print(f"[INFO] Script ended at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"[INFO] Total runtime: {elapsed / 60:.2f} minutes ({elapsed / 3600:.2f} hours)")

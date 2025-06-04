@@ -1,8 +1,12 @@
 from ct_reconstruction.models.deep_back_projection import DBP
 from accelerate import Accelerator
+import time
 
 accelerator = Accelerator()
-print(accelerator.state)
+
+
+start_time = time.time()
+print(f"[INFO] Script started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # training, validation and testing paths
 training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_train'
@@ -12,12 +16,12 @@ test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground
 
 # define parameters
 n_single_BP = 90
-alpha = 0.297807 #percentile 95
+alpha = 1
 i_0 = 100000
 sigma = 0.001
-max_len_train = 5000
-max_len_val = 600
-max_len_test = 600
+max_len_train = 2000
+max_len_val = 240
+max_len_test = 240
 seed = 29072000
 debug = True
 batch_size = 5
@@ -27,9 +31,9 @@ scheduler = True
 patience = 10
 
 
-model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_16_views_training_50000"
-log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_16_views_training_50000.log"
-figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_16_views_training_50000"
+model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_90_views_training_2000"
+log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_90_views_training_2000.log"
+figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_90_views_training_2000"
 
 # define model arquitecture
 model_dbp = DBP(model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file)
@@ -49,3 +53,9 @@ samples = model_dbp.results("testing", 5, figure_path)
 model_dbp.report_results_images(figure_path, samples)
 model_dbp.report_results_table(figure_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,
                          num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False)
+
+
+end_time = time.time()
+elapsed = end_time - start_time
+print(f"[INFO] Script ended at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"[INFO] Total runtime: {elapsed / 60:.2f} minutes ({elapsed / 3600:.2f} hours)")

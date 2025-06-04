@@ -4,7 +4,6 @@ from torch.nn import Conv1d, Conv2d, BatchNorm1d, Sequential, PReLU, ReLU, Param
 from ..models.model import ModelBase
 import json
 import tomosipo as ts
-
 import matplotlib.pyplot as plt
 from tomosipo.torch_support import (to_autograd)
 
@@ -53,17 +52,17 @@ class DeepFBPNetwork(Module):
             self.learnable_filter = LearnableFilter(ram_lak.clone().float(), per_angle=True, num_angles=self.num_angles_modulo)
 
         #initilize interpolator
-        self.interpolator_1 = self.intermediate_residual_block(self.num_angles_modulo)
-        self.interpolator_2 = self.intermediate_residual_block(self.num_angles_modulo)
-        self.interpolator_3 = self.intermediate_residual_block(self.num_angles_modulo)
+        self.interpolator_1 = intermediate_residual_block(self.num_angles_modulo)
+        self.interpolator_2 = intermediate_residual_block(self.num_angles_modulo)
+        self.interpolator_3 = intermediate_residual_block(self.num_angles_modulo)
         self.interpolator_conv = Conv1d(self.num_angles_modulo, self.num_angles_modulo, kernel_size=3, stride=1, padding=1)
 
         #initilize denoising part
-        self.denoising_conv_1 = Conv2d(1, 64, kernel_size=3, stride=1, padding=1)
-        self.denoising_res_1 = self.denoising_residual_block(64)
-        self.denoising_res_2 = self.denoising_residual_block(64)
-        self.denoising_res_3 = self.denoising_residual_block(64)
-        self.denoising_conv_2 = Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
+        self.denoising_conv_1 = Conv2d(1, 64, kernel_size=1, stride=1, padding=0)
+        self.denoising_res_1 = denoising_residual_block(64)
+        self.denoising_res_2 = denoising_residual_block(64)
+        self.denoising_res_3 = denoising_residual_block(64)
+        self.denoising_conv_2 = Conv2d(64, 1, kernel_size=1, stride=1, padding=0)
 
 
     def ram_lak_filter(self):
@@ -75,39 +74,6 @@ class DeepFBPNetwork(Module):
         ram_lak = torch.abs(freqs)
         return ram_lak
 
-
-    def intermediate_residual_block(self, channels):
-        """
-        Create a depthwise 1D residual convolutional block for interpolation.
-
-        Args:
-            channels (int): Number of input/output channels (usually equal to num_angles).
-
-        Returns:
-            torch.nn.Sequential: A depthwise residual block.
-        """
-        return Sequential(
-            Conv1d(channels, channels, kernel_size=3, stride=1, padding=1, groups=channels),
-            BatchNorm1d(channels),
-            PReLU()
-        )
-
-
-    def denoising_residual_block(self, in_channels):
-        """
-        Create a residual block used in the denoising stage.
-
-        Args:
-            in_channels (int): Number of input and output channels.
-
-        Returns:
-            torch.nn.Sequential: A 2-layer convolutional residual block.
-        """
-        return Sequential(
-            Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-            ReLU(inplace=True),
-            Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
-        )
 
 
     def forward(self, x):
@@ -131,30 +97,74 @@ class DeepFBPNetwork(Module):
         """
 
         # Apply filter for frequency domain
-        x = self.learnable_filter(x)
-        x = x.squeeze(1)
+        x1 = self.learnable_filter(x)
+        x1 = x1.squeeze(1)
 
 
         # Apply "interpolator", is changing the values of the sinogram directly, is more like a denoiser
-        x = x + self.interpolator_1(x)
-        x = x + self.interpolator_2(x)
-        x = x + self.interpolator_3(x)
-        x = self.interpolator_conv(x)
+        x2 = self.interpolator_1(x1)
+        x3 = self.interpolator_2(x2)
+        x4 = self.interpolator_3(x3)
+        x5 = self.interpolator_conv(x4)
 
-        x = x.unsqueeze(1)               # [B, 1, A, D]
+        x5 = x5.unsqueeze(1)               # [B, 1, A, D]
 
         # A.T() only accepts [1, A, D] so we iterate by batch
-        images = self.AT(x)  
+        images = self.AT(x5)  
 
         # apply denoiser to the output image
-        x = self.denoising_conv_1(images)
-        x = x + self.denoising_res_1(x)
-        x = x + self.denoising_res_2(x)
-        x = x + self.denoising_res_3(x)
-        x = self.denoising_conv_2(x)
-        return x
+        x6 = self.denoising_conv_1(images)
+        x7 = self.denoising_res_1(x6)
+        x8 = self.denoising_res_2(x7)
+        x9 = self.denoising_res_3(x8)
+        x10 = self.denoising_conv_2(x9)
+        return x10
 
 
+class intermediate_residual_block(Module):
+    """
+    Create a depthwise 1D residual convolutional block for interpolation.
+
+    Args:
+        channels (int): Number of input/output channels (usually equal to num_angles).
+
+    Returns:
+        torch.nn.Sequential: A depthwise residual block.
+    """
+    def __init__(self, channels):
+        super().__init__()
+        self.conv = Conv1d(channels, channels, kernel_size=3, stride=1, padding=1, groups=channels)
+        self.bn =  BatchNorm1d(channels)
+        self.prelu = PReLU()
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.bn(out)
+        out = self.prelu(out)
+        return x + out
+    
+class denoising_residual_block(Module):
+    """
+    Create a residual block used in the denoising stage.
+
+    Args:
+        in_channels (int): Number of input and output channels.
+
+    Returns:
+        torch.nn.Sequential: A 2-layer convolutional residual block.
+    """
+    def __init__(self, channels):
+        super().__init__()
+        self.conv = Conv2d(channels, channels, kernel_size=3, stride=1, padding=1)
+        self.relu =  ReLU(inplace=True)
+        self.conv2 = Conv2d(channels, channels, kernel_size=3, stride=1, padding=1)
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.relu(out)
+        out = self.conv2(out)
+        return x + out
+    
 class DeepFBP(ModelBase):
     """
     High-level wrapper for training and managing the Deep Filtered Backprojection (DeepFBP) model.

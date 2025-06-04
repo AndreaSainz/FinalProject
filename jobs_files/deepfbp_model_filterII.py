@@ -2,15 +2,12 @@ from ct_reconstruction.models.deep_filtered_back_projection import DeepFBP
 from accelerate import Accelerator
 import torch
 from ct_reconstruction.utils.plotting import plot_learned_filter
+import time
 
 accelerator = Accelerator()
 
-# Mostrar el dispositivo que está utilizando
-print("Dispositivo en uso:", accelerator.device)
-
-# Mostrar cuántas GPUs están disponibles
-num_gpus = torch.cuda.device_count()
-print("Número de GPUs disponibles:", num_gpus)
+start_time = time.time()
+print(f"[INFO] Script started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # training, validation and testing paths
 training_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground_truth_train'
@@ -21,7 +18,7 @@ test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground
 n_single_BP = 16
 sparse_view = False
 view_angles = 90
-alpha = 0.297807 #percentile 95
+alpha = 1
 i_0 = 100000
 sigma = 0.001
 max_len_train = 50
@@ -71,3 +68,8 @@ model_deepfbp.report_results_table(figure_path, test_path, max_len_test, num_ite
                          num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False)
 plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_0_epoch11")
 plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=500, angle = 90, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_training_try_filterII_90_epoch11")
+
+end_time = time.time()
+elapsed = end_time - start_time
+print(f"[INFO] Script ended at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"[INFO] Total runtime: {elapsed / 60:.2f} minutes ({elapsed / 3600:.2f} hours)")

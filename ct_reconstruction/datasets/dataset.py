@@ -18,7 +18,8 @@ class LoDoPaBDataset(Dataset):
     - Generating sparse-view sinograms and single-angle backprojections for learning-based reconstruction.
 
     Parameters:
-        ground_truth_dir (str): Path to the dataset directory or GCS bucket.
+        ground_truth_dir (str): Path to the dataset directory or GCS bucket. It should be, at least, 95% in the range [0-1]. 
+        Use the alpha to normalised the data in case this is not happening.
         vg (ts.VolumeGeometry): tomosipo volume geometry for the image domain.
         angles (np.ndarray): Full set of projection angles.
         pg (ts.ProjectionGeometry): tomosipo projection geometry for the scanner.

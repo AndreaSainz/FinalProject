@@ -31,7 +31,11 @@ class DeepFBPNetwork(Module):
         denoising_res_{1-3} (Sequential): Intermediate residual conv blocks.
         denoising_conv_2 (Conv2d): Final output conv layer of the denoiser.
     """
-    def __init__(self, num_detectors, num_angles, A, filter_type):
+    def __init__(self, num_detectors, num_angles, A, filter_type, pixel_size):
+        #Scan parameters from the paper and data
+        self.pixel_size = pixel_size
+
+
         # initilize parameter from parent clase Module
         super().__init__()
 
@@ -52,10 +56,10 @@ class DeepFBPNetwork(Module):
             self.learnable_filter = LearnableFilter(ram_lak.clone().float(), per_angle=True, num_angles=self.num_angles_modulo)
 
         #initilize interpolator
-        self.interpolator_1 = intermediate_residual_block(self.num_angles_modulo)
-        self.interpolator_2 = intermediate_residual_block(self.num_angles_modulo)
-        self.interpolator_3 = intermediate_residual_block(self.num_angles_modulo)
-        self.interpolator_conv = Conv1d(self.num_angles_modulo, self.num_angles_modulo, kernel_size=3, stride=1, padding=1)
+        self.interpolator_1 = intermediate_residual_block(1)
+        self.interpolator_2 = intermediate_residual_block(1)
+        self.interpolator_3 = intermediate_residual_block(1)
+        self.interpolator_conv = Conv1d(1, 1, kernel_size=3, stride=1, padding=1)
 
         #initilize denoising part
         self.denoising_conv_1 = Conv2d(1, 64, kernel_size=1, stride=1, padding=0)
@@ -69,15 +73,13 @@ class DeepFBPNetwork(Module):
         """
         Create the Ram-Lak filter directly in the frequency domain as |ω| over the FFT frequencies.
         """
-        delta_r = self.pixel_size / (self.num_detectors - 1)   # cm por detector
-        freqs = torch.fft.fftfreq(self.num_detectors, d=delta_r)  # ciclos/cm
-        omega = 2 * torch.pi * freqs          # rad/cm
+        freqs = torch.fft.fftfreq(self.num_detectors)  # sin especificar d => frecuencias en [-0.5, 0.5)
 
-        ram_lak = torch.abs(omega)           # |ω| en rad/cm
+        # Filtro Ram-Lak: forma de V con máximo 1 en |f| = 0.5
+        ram_lak = 2 * torch.abs(freqs)  # Normalizado: de 0 a 1
 
-        self.freqs_rad_cm = omega
+        self.freqs_normalized = freqs
         return ram_lak
-
 
 
     def forward(self, x):
@@ -99,35 +101,37 @@ class DeepFBPNetwork(Module):
         Returns:
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
-        plt.imshow(x[0,0], aspect='auto', cmap='gray')
+        plt.imshow(x[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
         plt.title("Sinograma inicial")
-        plt.show()
+        plt.savefig(f"debug_images_Sinograma_inicial.png")
 
         # Apply filter for frequency domain
         x1 = self.learnable_filter(x)
-        plt.imshow(x1[0,0], aspect='auto', cmap='gray')
+        plt.imshow(x1[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
         plt.title("Sinograma filtrado")
-        plt.show()
+        plt.savefig(f"debug_images_Sinograma_filtrado.png")
 
         x1 = x1.squeeze(1)
+        # Supón que x1: [B, A, D]
+        x1 = x1.reshape(-1, 1, self.num_detectors)  # [B*A, 1, D]
 
-
-        # Apply "interpolator", is changing the values of the sinogram directly, is more like a denoiser
+        # Aplicar los bloques residuales 1D
         x2 = self.interpolator_1(x1)
         x3 = self.interpolator_2(x2)
         x4 = self.interpolator_3(x3)
         x5 = self.interpolator_conv(x4)
 
+        x5 = x5.view(-1, self.num_angles_modulo, self.num_detectors)
         x5 = x5.unsqueeze(1)               # [B, 1, A, D]
 
-        plt.imshow(x5[0,0], aspect='auto', cmap='gray')
+        plt.imshow(x5[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
         plt.title("Sinograma interpolador")
-        plt.show()
+        plt.savefig(f"debug_images_Sinograma_interpolado.png")
 
         # A.T() only accepts [1, A, D] so we iterate by batch
         images = self.AT(x5)  
 
-        plt.imshow(images[0,0], aspect='auto', cmap='gray')
+        plt.imshow(images[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
         plt.title("Imagen Tomosipo")
         plt.show()
 
@@ -138,10 +142,11 @@ class DeepFBPNetwork(Module):
         x9 = self.denoising_res_3(x8)
         x10 = self.denoising_conv_2(x9)
 
-        plt.imshow(x10[0,0], aspect='auto', cmap='gray')
+        plt.imshow(x10[0,0].detach().cpu().numpy(), aspect='auto', cmap='gray')
         plt.title("Imagen denoiser")
-        plt.show()
+        plt.savefig(f"debug_images_Sinograma_denoiser.png")
         return x10
+
 
 
 class intermediate_residual_block(Module):
@@ -166,6 +171,7 @@ class intermediate_residual_block(Module):
         out = self.prelu(out)
         return x + out
     
+
 class denoising_residual_block(Module):
     """
     Create a residual block used in the denoising stage.
@@ -232,7 +238,7 @@ class DeepFBP(ModelBase):
         self.A_deepfbp, self.pg_deepfbp, self.num_angles_deepfbp = self._build_projection_operator()
 
 
-        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type)
+        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type, self.pixel_size)
 
 
     def _build_projection_operator(self):

@@ -1,6 +1,6 @@
 import torch
 from torch.nn import Module
-from torch.nn import Conv1d, Conv2d, BatchNorm1d, Sequential, PReLU, ReLU, Parameter
+from torch.nn import Conv1d, Conv2d, BatchNorm1d, PReLU, ReLU, Parameter
 from ..models.model import ModelBase
 import json
 import tomosipo as ts
@@ -31,9 +31,10 @@ class DeepFBPNetwork(Module):
         denoising_res_{1-3} (Sequential): Intermediate residual conv blocks.
         denoising_conv_2 (Conv2d): Final output conv layer of the denoiser.
     """
-    def __init__(self, num_detectors, num_angles, A, filter_type, pixel_size):
+    def __init__(self, num_detectors, num_angles, A, filter_type, pixel_size, pixels):
         #Scan parameters from the paper and data
         self.pixel_size = pixel_size
+        self.pixels = pixels
 
 
         # initilize parameter from parent clase Module
@@ -63,22 +64,23 @@ class DeepFBPNetwork(Module):
 
         #initilize denoising part
         self.denoising_conv_1 = Conv2d(1, 64, kernel_size=1, stride=1, padding=0)
+        self.denoising_conv_2 = Conv2d(64, 64, kernel_size=3, padding=1)
         self.denoising_res_1 = denoising_residual_block(64)
         self.denoising_res_2 = denoising_residual_block(64)
         self.denoising_res_3 = denoising_residual_block(64)
-        self.denoising_conv_2 = Conv2d(64, 1, kernel_size=1, stride=1, padding=0)
+        self.denoising_conv_3 = Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
 
 
     def ram_lak_filter(self):
         """
         Create the Ram-Lak filter directly in the frequency domain as |ω| over the FFT frequencies.
         """
-        freqs = torch.fft.fftfreq(self.num_detectors)  # sin especificar d => frecuencias en [-0.5, 0.5)
+        d = self.pixel_size / self.pixels
+        freqs = torch.fft.fftfreq(self.num_detectors, d=d)
 
-        # Filtro Ram-Lak: forma de V con máximo 1 en |f| = 0.5
-        ram_lak = 2 * torch.abs(freqs)  # Normalizado: de 0 a 1
-
-        self.freqs_normalized = freqs
+        # Normalización en [0, 1]
+        freqs_norm = torch.abs(freqs) / torch.max(torch.abs(freqs))
+        ram_lak = freqs_norm  # o 2 * freqs_norm si prefieres el pico en 1
         return ram_lak
 
 
@@ -101,9 +103,18 @@ class DeepFBPNetwork(Module):
         Returns:
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
-        
+        plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
+        plt.title("Sinograma inicial")
+        plt.savefig("sinograma_inicial.png")
+        plt.close()
+
         # Apply filter for frequency domain
         x1 = self.learnable_filter(x)
+
+        plt.imshow(x1[0,0].detach().cpu().numpy(), cmap='gray')
+        plt.title("Sinograma filtrado")
+        plt.savefig("sinograma_filtrado.png")
+        plt.close()
         
         x1 = x1.squeeze(1)
         # Supón que x1: [B, A, D]
@@ -118,17 +129,19 @@ class DeepFBPNetwork(Module):
         x5 = x5.view(-1, self.num_angles_modulo, self.num_detectors)
         x5 = x5.unsqueeze(1)               # [B, 1, A, D]
 
+    
         # A.T() only accepts [1, A, D] so we iterate by batch
         images = self.AT(x5)  
 
         # apply denoiser to the output image
         x6 = self.denoising_conv_1(images)
-        x7 = self.denoising_res_1(x6)
-        x8 = self.denoising_res_2(x7)
-        x9 = self.denoising_res_3(x8)
-        x10 = self.denoising_conv_2(x9)
+        x7 = self.denoising_conv_2(x6)
+        x8 = self.denoising_res_1(x7)
+        x9 = self.denoising_res_2(x8)
+        x10 = self.denoising_res_3(x9)
+        x11 = self.denoising_conv_3(x10)
 
-        return x10
+        return x11
 
 
 class intermediate_residual_block(Module):
@@ -220,7 +233,7 @@ class DeepFBP(ModelBase):
         self.A_deepfbp, self.pg_deepfbp, self.num_angles_deepfbp = self._build_projection_operator()
 
 
-        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type, self.pixel_size)
+        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type, self.pixel_size, self.pixels)
 
 
     def _build_projection_operator(self):

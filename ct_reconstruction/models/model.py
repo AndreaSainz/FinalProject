@@ -557,7 +557,7 @@ class ModelBase(Module):
             sample = next(iter(train_dataloader))["sparse_sinogram"]
         else:
             sample = next(iter(train_dataloader))["noisy_sinogram"]
-        summary(self.model, input_size=tuple(sample.shape[1:])) #just for debugging
+        #summary(self.model, input_size=tuple(sample.shape[1:])) #just for debugging
 
         # confirmation for the model to be train 
         if confirm_train:
@@ -758,8 +758,8 @@ class ModelBase(Module):
         with torch.no_grad():
 
             # set the model in evaluation mode
-            self.model.eval()
-
+            self.model.eval() 
+            
             # initialize metrics
             total_test_loss = 0
             total_psnr = 0

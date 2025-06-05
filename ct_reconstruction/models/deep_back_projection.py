@@ -180,7 +180,8 @@ class DBP(ModelBase):
         Returns:
             torch.Tensor: Output tensor of shape (B, 1, H, W), representing the reconstructed image.
         """
-
+        print(x.shape)
+        
         # initial part
         conv1 = self.conv1(x)
 

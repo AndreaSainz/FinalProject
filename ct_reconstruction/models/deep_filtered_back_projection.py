@@ -1,7 +1,8 @@
 import torch
-from torch.nn import Module
+from torch.nn import Module 
 from torch.nn import Conv1d, Conv2d, BatchNorm1d, PReLU, ReLU, Parameter
 from ..models.model import ModelBase
+from torch.nn.functional import pad
 import json
 import tomosipo as ts
 import matplotlib.pyplot as plt
@@ -31,12 +32,7 @@ class DeepFBPNetwork(Module):
         denoising_res_{1-3} (Sequential): Intermediate residual conv blocks.
         denoising_conv_2 (Conv2d): Final output conv layer of the denoiser.
     """
-    def __init__(self, num_detectors, num_angles, A, filter_type, pixel_size, pixels):
-        #Scan parameters from the paper and data
-        self.pixel_size = pixel_size
-        self.pixels = pixels
-
-
+    def __init__(self, num_detectors, num_angles, A, filter_type):
         # initilize parameter from parent clase Module
         super().__init__()
 
@@ -47,14 +43,23 @@ class DeepFBPNetwork(Module):
         self.filter_type = filter_type
         self.AT = to_autograd(self.A_modulo.T, is_2d=True, num_extra_dims=2)
 
+
+        #Scan parameters from the paper and data
+        self.projection_size_padded = self.compute_projection_size_padded()
+        self.padding = self.projection_size_padded - self.num_detectors
+        
+        
         # initilize filter as ram-lak filter
-        ram_lak = self.ram_lak_filter()
+        ram_lak = self.ram_lak_filter(self.projection_size_padded)
+        print(f"ram_lak.shape = {ram_lak.shape}")
 
         #create the filter from the class
         if self.filter_type == "Filter I":
             self.learnable_filter = LearnableFilter(ram_lak.clone().float(), per_angle=False)
         else:
             self.learnable_filter = LearnableFilter(ram_lak.clone().float(), per_angle=True, num_angles=self.num_angles_modulo)
+
+        print(f"Filter weights shape = {self.learnable_filter.weights.shape}")
 
         #initilize interpolator
         self.interpolator_1 = intermediate_residual_block(1)
@@ -71,18 +76,26 @@ class DeepFBPNetwork(Module):
         self.denoising_conv_3 = Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
 
 
-    def ram_lak_filter(self):
+
+    def compute_projection_size_padded(self):
+        """
+        Calcula el tamaño de padding como la siguiente potencia de 2 mayor que 2 * num_detectors.
+        """
+        size = self.num_detectors
+        power = size.bit_length() 
+        return max(64, 2 ** power)
+    
+
+    def ram_lak_filter(self, size):
         """
         Create the Ram-Lak filter directly in the frequency domain as |ω| over the FFT frequencies.
         """
-        d = self.pixel_size / self.pixels
-        freqs = torch.fft.fftfreq(self.num_detectors, d=d)
-
-        # Normalización en [0, 1]
-        freqs_norm = torch.abs(freqs) / torch.max(torch.abs(freqs))
-        ram_lak = freqs_norm  # o 2 * freqs_norm si prefieres el pico en 1
-        return ram_lak
-
+        steps = int(size / 2 + 1)
+        ramp = torch.linspace(0, 1, steps, dtype=torch.float32)
+        down = torch.linspace(1, 0, steps, dtype=torch.float32)
+        f = torch.cat([ramp, down[:-2]])
+        return f
+    
 
     def forward(self, x):
         """
@@ -103,20 +116,36 @@ class DeepFBPNetwork(Module):
         Returns:
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
+        print(f" shape inicial {x.shape}")
+
         plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
         plt.title("Sinograma inicial")
         plt.savefig("sinograma_inicial.png")
         plt.close()
 
-        # Apply filter for frequency domain
+        # apply padding to avoid aliasing 
+        x = x.squeeze(1)
+        x = pad(x, (0, self.padding), mode="constant", value=0)  # Padding al final de la dimensión de detectores
+        print(f" shape padding {x.shape}")
+
+        assert x.shape[-1] == self.projection_size_padded, \
+            f"Expected input with padding {self.projection_size_padded}, got {x.shape[-1]}"
+
+        plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
+        plt.title("Sinograma padding")
+        plt.savefig("sinograma_padding.png")
+        plt.close()
+
+        # Apply filter for frequency domain and recover the original sinogram
         x1 = self.learnable_filter(x)
+        x1 = x1[..., :self.num_detectors]
 
         plt.imshow(x1[0,0].detach().cpu().numpy(), cmap='gray')
         plt.title("Sinograma filtrado")
         plt.savefig("sinograma_filtrado.png")
         plt.close()
         
-        x1 = x1.squeeze(1)
+        #x1 = x1.squeeze(1)
         # Supón que x1: [B, A, D]
         x1 = x1.reshape(-1, 1, self.num_detectors)  # [B*A, 1, D]
 
@@ -129,9 +158,18 @@ class DeepFBPNetwork(Module):
         x5 = x5.view(-1, self.num_angles_modulo, self.num_detectors)
         x5 = x5.unsqueeze(1)               # [B, 1, A, D]
 
+        plt.imshow(x5[0,0].detach().cpu().numpy(), cmap='gray')
+        plt.title("Sinograma interpolado")
+        plt.savefig("sinograma_interpolado.png")
+        plt.close()
     
         # A.T() only accepts [1, A, D] so we iterate by batch
         images = self.AT(x5)  
+
+        plt.imshow(images[0].unsqueeze(0).detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
+        plt.title("Imagen Tomosipo")
+        plt.savefig("imagen_tomosipo.png")
+        plt.close()
 
         # apply denoiser to the output image
         x6 = self.denoising_conv_1(images)
@@ -140,6 +178,11 @@ class DeepFBPNetwork(Module):
         x9 = self.denoising_res_2(x8)
         x10 = self.denoising_res_3(x9)
         x11 = self.denoising_conv_3(x10)
+
+        plt.imshow(x11[0].unsqueeze(0).detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
+        plt.title("Imagen denoiser")
+        plt.savefig("imagen_denoiser.png")
+        plt.close()
 
         return x11
 
@@ -167,6 +210,7 @@ class intermediate_residual_block(Module):
         return x + out
     
 
+
 class denoising_residual_block(Module):
     """
     Create a residual block used in the denoising stage.
@@ -189,6 +233,7 @@ class denoising_residual_block(Module):
         out = self.conv2(out)
         return x + out
     
+
 class DeepFBP(ModelBase):
     """
     High-level wrapper for training and managing the Deep Filtered Backprojection (DeepFBP) model.
@@ -233,7 +278,7 @@ class DeepFBP(ModelBase):
         self.A_deepfbp, self.pg_deepfbp, self.num_angles_deepfbp = self._build_projection_operator()
 
 
-        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type, self.pixel_size, self.pixels)
+        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type)
 
 
     def _build_projection_operator(self):

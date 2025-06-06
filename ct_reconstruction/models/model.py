@@ -150,7 +150,7 @@ class ModelBase(Module):
             self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.n_single_BP).long()
             # so the angles match the subset that was taken from the original angles
             angles_sparse = self.angles[self.indices_base] 
-            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, src_det_dist=self.src_det_dist, shape=(1, self.num_detectors),size=(1.0,self.pixel_size) )
+            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
             self.A_sparse = ts.operator(self.vg, self.pg_sparse)
         else:
             self.indices_base = torch.arange(self.num_angles)

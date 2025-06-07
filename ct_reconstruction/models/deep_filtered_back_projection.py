@@ -68,7 +68,9 @@ class DeepFBPNetwork(Module):
         self.interpolator_conv = Conv1d(1, 1, kernel_size=3, stride=1, padding=1)
 
         # move range of image to [0,1]
-        self.denoising_output_normalizer = BatchNorm2d(1)
+        self.denoising_output_normalizer = Conv2d(1, 1, kernel_size=1, bias=True)
+        torch.nn.init.constant_(self.denoising_output_normalizer.weight, 1.0)
+        torch.nn.init.constant_(self.denoising_output_normalizer.bias, 0.0)
 
         #initilize denoising part
         self.denoising_conv_1 = Conv2d(1, 64, kernel_size=1, stride=1, padding=0, bias=True)
@@ -123,87 +125,86 @@ class DeepFBPNetwork(Module):
         Returns:
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
-        print(f" shape inicial {x.shape}")
-        max_val = x[0,0].max()
-        min_val =  x[0,0].min()
-        plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma inicial vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        plt.savefig("sinograma_inicial.png")
-        plt.close()
+        #print(f" shape inicial {x.shape}")
+        #max_val = x[0,0].max()
+        #min_val =  x[0,0].min()
+        #plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
+        #plt.title(f"Sinograma inicial vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
+        #plt.savefig("sinograma_inicial.png")
+        #plt.close()
 
-        images1 = self.AT(x)  
+        #images1 = self.AT(x)  
 
-        img_np = images1[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
+        #img_np = images1[0].squeeze().detach().cpu().numpy()
+        #max_val = img_np.max()
 
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
         # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Tomosipo inicial vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
+        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        #axs[0].set_title(f"Tomosipo inicial vmin/vmax (max={max_val:.4f})")
+        #axs[0].axis("off")
 
         # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Tomosipo inicial auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
+        #axs[1].imshow(img_np, cmap='gray')
+        #axs[1].set_title(f"Tomosipo inicial auto escala (max={max_val:.4f})")
+        #axs[1].axis("off")
 
-        plt.tight_layout()
-        plt.savefig("imagen_tomosipo_inicial.png")
-        plt.close()
+        #plt.tight_layout()
+        #plt.savefig("imagen_tomosipo_inicial.png")
+        #plt.close()
 
         # apply padding to avoid aliasing 
         x = x.squeeze(1)
         x = pad(x, (0, self.padding), mode="constant", value=0)  # Padding al final de la dimensión de detectores
-        print(f" shape padding {x.shape}")
+        #print(f" shape padding {x.shape}")
 
-        assert x.shape[-1] == self.projection_size_padded, \
-            f"Expected input with padding {self.projection_size_padded}, got {x.shape[-1]}"
+        #assert x.shape[-1] == self.projection_size_padded, \
+        #    f"Expected input with padding {self.projection_size_padded}, got {x.shape[-1]}"
 
-        max_val = x[0].max()
-        min_val =  x[0].min()
-        plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma padding vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        plt.savefig("sinograma_padding.png")
-        plt.close()
+        #max_val = x[0].max()
+        #min_val =  x[0].min()
+        #plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
+        #plt.title(f"Sinograma padding vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
+        #plt.savefig("sinograma_padding.png")
+        #plt.close()
 
         # Apply filter for frequency domain and recover the original sinogram
         x1 = self.learnable_filter(x)
         x1 = x1[..., :self.num_detectors]
-        x_img = x1.unsqueeze(1)
-        images1 = self.AT(x_img)  
+        #x_img = x1.unsqueeze(1)
+        #images1 = self.AT(x_img)  
 
-        img_np = images1[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
+        #img_np = images1[0].squeeze().detach().cpu().numpy()
+        #max_val = img_np.max()
 
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
         # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Tomosipo filtrado vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
+        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        #axs[0].set_title(f"Tomosipo filtrado vmin/vmax (max={max_val:.4f})")
+        #axs[0].axis("off")
 
         # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Tomosipo filtrado auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
+        #axs[1].imshow(img_np, cmap='gray')
+        #axs[1].set_title(f"Tomosipo filtrado auto escala (max={max_val:.4f})")
+        #axs[1].axis("off")
 
-        plt.tight_layout()
-        plt.savefig("imagen_tomosipo_filtrado.png")
-        plt.close()
+        #plt.tight_layout()
+        #plt.savefig("imagen_tomosipo_filtrado.png")
+        #plt.close()
 
-        max_val = x1[0].max()
-        min_val =  x1[0].min()
-        plt.imshow(x1[0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma filtrado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        plt.savefig("sinograma_filtrado.png")
-        plt.close()
+        #max_val = x1[0].max()
+        #min_val =  x1[0].min()
+        #plt.imshow(x1[0].detach().cpu().numpy(), cmap='gray')
+        #plt.title(f"Sinograma filtrado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
+        #plt.savefig("sinograma_filtrado.png")
+        #plt.close()
         
-        #x1 = x1.squeeze(1)
-        # Supón que x1: [B, A, D]
+        # we assum x1: [B, A, D]
         x1 = x1.reshape(-1, 1, self.num_detectors)  # [B*A, 1, D]
 
-        # Aplicar los bloques residuales 1D
+        # apply residual blocks
         x2 = self.interpolator_1(x1)
         x3 = self.interpolator_2(x2)
         x4 = self.interpolator_3(x3)
@@ -212,35 +213,37 @@ class DeepFBPNetwork(Module):
         x5 = x5.view(-1, self.num_angles_modulo, self.num_detectors)
         x5 = x5.unsqueeze(1)               # [B, 1, A, D]
 
-        plt.imshow(x5[0,0].detach().cpu().numpy(), cmap='gray')
-        plt.title("Sinograma interpolado")
-        plt.savefig("sinograma_interpolado.png")
-        plt.close()
+        #max_val = x5[0,0].max()
+        #min_val =  x5[0,0].min()
+        #plt.imshow(x5[0,0].detach().cpu().numpy(), cmap='gray')
+        #plt.title("Sinograma interpolado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f}")
+        #plt.savefig("sinograma_interpolado.png")
+        #plt.close()
     
         # A.T() only accepts [1, A, D] so we iterate by batch
         images = self.AT(x5)  
 
-        img_np = images[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
+        #img_np = images[0].squeeze().detach().cpu().numpy()
+        #max_val = img_np.max()
 
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
         # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Tomosipo vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
+        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        #axs[0].set_title(f"Tomosipo vmin/vmax (max={max_val:.4f})")
+        #axs[0].axis("off")
 
         # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Tomosipo auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
+        #axs[1].imshow(img_np, cmap='gray')
+        #axs[1].set_title(f"Tomosipo auto escala (max={max_val:.4f})")
+        #axs[1].axis("off")
 
-        plt.tight_layout()
-        plt.savefig("imagen_tomosipo.png")
-        plt.close()
+        #plt.tight_layout()
+        #plt.savefig("imagen_tomosipo.png")
+        #plt.close()
 
         # normalised output to the 0-1 range
-        #images = self.denoising_output_normalizer(images)
+        images = self.denoising_output_normalizer(images)
 
         #img_np = images[0].squeeze().detach().cpu().numpy()
         #max_val = img_np.max()
@@ -269,24 +272,24 @@ class DeepFBPNetwork(Module):
         x10 = self.denoising_res_3(x9)
         x11 = self.denoising_conv_3(x10)
 
-        img_np = x11[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
+        #img_np = x11[0].squeeze().detach().cpu().numpy()
+        #max_val = img_np.max()
 
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
         # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Denoiser vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
+        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        #axs[0].set_title(f"Denoiser vmin/vmax (max={max_val:.4f})")
+        #axs[0].axis("off")
 
         # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Denoiser auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
+        #axs[1].imshow(img_np, cmap='gray')
+        #axs[1].set_title(f"Denoiser auto escala (max={max_val:.4f})")
+        #axs[1].axis("off")
 
-        plt.tight_layout()
-        plt.savefig("imagen_denoiser.png")
-        plt.close()
+        #plt.tight_layout()
+        #plt.savefig("imagen_denoiser.png")
+        #plt.close()
 
         return x11
 

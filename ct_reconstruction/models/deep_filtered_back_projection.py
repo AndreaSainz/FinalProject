@@ -1,6 +1,6 @@
 import torch
-from torch.nn import Module 
-from torch.nn import Conv1d, Conv2d, BatchNorm1d, PReLU, ReLU, Parameter
+from torch.nn import Module , Sequential
+from torch.nn import Conv1d, Conv2d, BatchNorm1d, BatchNorm2d, PReLU, ReLU, Parameter, Hardtanh
 from ..models.model import ModelBase
 from torch.nn.functional import pad
 import json
@@ -67,13 +67,20 @@ class DeepFBPNetwork(Module):
         self.interpolator_3 = intermediate_residual_block(1)
         self.interpolator_conv = Conv1d(1, 1, kernel_size=3, stride=1, padding=1)
 
+        # move range of image to [0,1]
+        self.denoising_output_normalizer = BatchNorm2d(1)
+
         #initilize denoising part
-        self.denoising_conv_1 = Conv2d(1, 64, kernel_size=1, stride=1, padding=0)
+        self.denoising_conv_1 = Conv2d(1, 64, kernel_size=1, stride=1, padding=0, bias=True)
         self.denoising_conv_2 = Conv2d(64, 64, kernel_size=3, padding=1)
         self.denoising_res_1 = denoising_residual_block(64)
         self.denoising_res_2 = denoising_residual_block(64)
         self.denoising_res_3 = denoising_residual_block(64)
-        self.denoising_conv_3 = Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
+        # to mantain the image in the range [0,1]
+        self.denoising_conv_3 = Sequential(
+            Conv2d(64, 1, kernel_size=3, stride=1, padding=1, bias=True),
+            Hardtanh(0, 1)
+        )
 
 
 
@@ -117,10 +124,32 @@ class DeepFBPNetwork(Module):
             torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
         """
         print(f" shape inicial {x.shape}")
-
+        max_val = x[0,0].max()
+        min_val =  x[0,0].min()
         plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
-        plt.title("Sinograma inicial")
+        plt.title(f"Sinograma inicial vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
         plt.savefig("sinograma_inicial.png")
+        plt.close()
+
+        images1 = self.AT(x)  
+
+        img_np = images1[0].squeeze().detach().cpu().numpy()
+        max_val = img_np.max()
+
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+
+        # Imagen con vmin/vmax
+        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        axs[0].set_title(f"Tomosipo inicial vmin/vmax (max={max_val:.4f})")
+        axs[0].axis("off")
+
+        # Imagen sin vmin/vmax
+        axs[1].imshow(img_np, cmap='gray')
+        axs[1].set_title(f"Tomosipo inicial auto escala (max={max_val:.4f})")
+        axs[1].axis("off")
+
+        plt.tight_layout()
+        plt.savefig("imagen_tomosipo_inicial.png")
         plt.close()
 
         # apply padding to avoid aliasing 
@@ -131,17 +160,42 @@ class DeepFBPNetwork(Module):
         assert x.shape[-1] == self.projection_size_padded, \
             f"Expected input with padding {self.projection_size_padded}, got {x.shape[-1]}"
 
+        max_val = x[0].max()
+        min_val =  x[0].min()
         plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
-        plt.title("Sinograma padding")
+        plt.title(f"Sinograma padding vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
         plt.savefig("sinograma_padding.png")
         plt.close()
 
         # Apply filter for frequency domain and recover the original sinogram
         x1 = self.learnable_filter(x)
         x1 = x1[..., :self.num_detectors]
+        x_img = x1.unsqueeze(1)
+        images1 = self.AT(x_img)  
 
-        plt.imshow(x1[0,0].detach().cpu().numpy(), cmap='gray')
-        plt.title("Sinograma filtrado")
+        img_np = images1[0].squeeze().detach().cpu().numpy()
+        max_val = img_np.max()
+
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+
+        # Imagen con vmin/vmax
+        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        axs[0].set_title(f"Tomosipo filtrado vmin/vmax (max={max_val:.4f})")
+        axs[0].axis("off")
+
+        # Imagen sin vmin/vmax
+        axs[1].imshow(img_np, cmap='gray')
+        axs[1].set_title(f"Tomosipo filtrado auto escala (max={max_val:.4f})")
+        axs[1].axis("off")
+
+        plt.tight_layout()
+        plt.savefig("imagen_tomosipo_filtrado.png")
+        plt.close()
+
+        max_val = x1[0].max()
+        min_val =  x1[0].min()
+        plt.imshow(x1[0].detach().cpu().numpy(), cmap='gray')
+        plt.title(f"Sinograma filtrado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
         plt.savefig("sinograma_filtrado.png")
         plt.close()
         
@@ -166,10 +220,46 @@ class DeepFBPNetwork(Module):
         # A.T() only accepts [1, A, D] so we iterate by batch
         images = self.AT(x5)  
 
-        plt.imshow(images[0].unsqueeze(0).detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
-        plt.title("Imagen Tomosipo")
+        img_np = images[0].squeeze().detach().cpu().numpy()
+        max_val = img_np.max()
+
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+
+        # Imagen con vmin/vmax
+        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        axs[0].set_title(f"Tomosipo vmin/vmax (max={max_val:.4f})")
+        axs[0].axis("off")
+
+        # Imagen sin vmin/vmax
+        axs[1].imshow(img_np, cmap='gray')
+        axs[1].set_title(f"Tomosipo auto escala (max={max_val:.4f})")
+        axs[1].axis("off")
+
+        plt.tight_layout()
         plt.savefig("imagen_tomosipo.png")
         plt.close()
+
+        # normalised output to the 0-1 range
+        #images = self.denoising_output_normalizer(images)
+
+        #img_np = images[0].squeeze().detach().cpu().numpy()
+        #max_val = img_np.max()
+
+        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+
+        # Imagen con vmin/vmax
+        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        #axs[0].set_title(f"Tomosipo normalised vmin/vmax (max={max_val:.4f})")
+        #axs[0].axis("off")
+
+        # Imagen sin vmin/vmax
+        #axs[1].imshow(img_np, cmap='gray')
+        #axs[1].set_title(f"Tomosipo auto escala normalised (max={max_val:.4f})")
+        #axs[1].axis("off")
+
+        #plt.tight_layout()
+        #plt.savefig("imagen_tomosipo_normalised.png")
+        #plt.close()
 
         # apply denoiser to the output image
         x6 = self.denoising_conv_1(images)
@@ -179,8 +269,22 @@ class DeepFBPNetwork(Module):
         x10 = self.denoising_res_3(x9)
         x11 = self.denoising_conv_3(x10)
 
-        plt.imshow(x11[0].unsqueeze(0).detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
-        plt.title("Imagen denoiser")
+        img_np = x11[0].squeeze().detach().cpu().numpy()
+        max_val = img_np.max()
+
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+
+        # Imagen con vmin/vmax
+        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        axs[0].set_title(f"Denoiser vmin/vmax (max={max_val:.4f})")
+        axs[0].axis("off")
+
+        # Imagen sin vmin/vmax
+        axs[1].imshow(img_np, cmap='gray')
+        axs[1].set_title(f"Denoiser auto escala (max={max_val:.4f})")
+        axs[1].axis("off")
+
+        plt.tight_layout()
         plt.savefig("imagen_denoiser.png")
         plt.close()
 
@@ -199,7 +303,7 @@ class intermediate_residual_block(Module):
     """
     def __init__(self, channels):
         super().__init__()
-        self.conv = Conv1d(channels, channels, kernel_size=3, stride=1, padding=1, groups=channels)
+        self.conv = Conv1d(channels, channels, kernel_size=3, stride=1, padding=1, groups=channels,bias=True)
         self.bn =  BatchNorm1d(channels)
         self.prelu = PReLU()
 
@@ -223,15 +327,16 @@ class denoising_residual_block(Module):
     """
     def __init__(self, channels):
         super().__init__()
-        self.conv = Conv2d(channels, channels, kernel_size=3, stride=1, padding=1)
+        self.conv = Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=True)
         self.relu =  ReLU(inplace=True)
-        self.conv2 = Conv2d(channels, channels, kernel_size=3, stride=1, padding=1)
+        self.conv2 = Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=True)
 
     def forward(self, x):
         out = self.conv(x)
         out = self.relu(out)
         out = self.conv2(out)
-        return x + out
+        x2 = x + out
+        return torch.clamp(x2, 0, 1)
     
 
 class DeepFBP(ModelBase):
@@ -324,31 +429,28 @@ class DeepFBP(ModelBase):
         Configures model parameter training for staged learning.
 
         Phase options:
-            1 → Train only the learnable frequency filter.
-            2 → Train the filter + interpolator blocks.
-            3 → Train the entire model (filter + interpolator + denoiser).
-
-        Args:
-            phase (int): Training stage identifier (1, 2, or 3).
-
-        Raises:
-            ValueError: If the input phase is not one of [1, 2, 3].
+            1 → Train only the learnable filter and output normalizer.
+            2 → Filter + interpolators + output normalizer.
+            3 → All model components.
         """
-        # change all parameters to no require gradient
+        # Disable all gradients
         for param in self.model.parameters():
             param.requires_grad = False
 
-        if phase == 1:
-            self._log("[TrainPhase] Activating only the learnable filter")
-            for param in self.model.learnable_filter.parameters():
+        # Always train the output normalizer and the filter
+        for param in self.model.denoising_output_normalizer.parameters():
+            param.requires_grad = True
+
+        for param in self.model.learnable_filter.parameters():
                 param.requires_grad = True
+
+        if phase == 1:
+            self._log("[TrainPhase] Activating learnable filter and output normalizer")
 
         elif phase == 2:
-            self._log("[TrainPhase] Activating learnable filter and interpolators")
-            for param in self.model.learnable_filter.parameters():
-                param.requires_grad = True
-
-            for interpolator in [self.model.interpolator_1, self.model.interpolator_2, self.model.interpolator_3, self.model.interpolator_conv]:
+            self._log("[TrainPhase] Activating filter, interpolators, and output normalizer")
+            for interpolator in [self.model.interpolator_1, self.model.interpolator_2,
+                                self.model.interpolator_3, self.model.interpolator_conv]:
                 for param in interpolator.parameters():
                     param.requires_grad = True
 
@@ -356,10 +458,10 @@ class DeepFBP(ModelBase):
             self._log("[TrainPhase] Activating all model parameters")
             for param in self.model.parameters():
                 param.requires_grad = True
+
         else:
             raise ValueError("Invalid training phase. Use 1, 2 or 3.")
-        
-        #change the phase parameter to the correct training phase
+
         self.current_phase = phase
 
 

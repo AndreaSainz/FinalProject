@@ -1,346 +1,345 @@
 import torch
-from torch.nn import Module , Sequential
-from torch.nn import Conv1d, Conv2d, BatchNorm1d, BatchNorm2d, PReLU, ReLU, Parameter, Hardtanh
-from ..models.model import ModelBase
+from torch.nn import Module, Sequential, Conv1d, Conv2d, BatchNorm1d, PReLU, ReLU, Parameter, Hardtanh
 from torch.nn.functional import pad
-import json
-import tomosipo as ts
 import matplotlib.pyplot as plt
-from tomosipo.torch_support import (to_autograd)
+import tomosipo as ts
+from tomosipo.torch_support import to_autograd
+import json
+from ..models.model import ModelBase
+
+
+class LearnableFilter(Module):
+    """
+    Learnable frequency-domain filter module for CT sinograms.
+
+    This module replaces traditional filters like Ram-Lak with trainable parameters
+    in the frequency domain. It supports shared or per-angle filters.
+
+    Args:
+        init_filter (torch.Tensor): Initial 1D filter in the frequency domain.
+        per_angle (bool): If True, uses one filter per angle.
+        num_angles (int, optional): Required if per_angle=True.
+    """
+    def __init__(self, init_filter, per_angle=False, num_angles=None):
+        super().__init__()
+        self.per_angle = per_angle
+
+        if per_angle:
+            assert num_angles is not None, "num_angles must be provided when per_angle=True"
+            filters = torch.stack([init_filter.clone().detach() for _ in range(num_angles)])
+            self.register_parameter("weights", Parameter(filters))
+        else:
+            self.register_parameter("weights", Parameter(init_filter))
+
+    def forward(self, x):
+        ftt1d = torch.fft.fft(x, dim=-1)
+        if self.per_angle:
+            filtered = ftt1d * self.weights[None, :, :]
+        else:
+            filtered = ftt1d * self.weights[None, None, :]
+        return torch.fft.ifft(filtered, dim=-1).real
+
+
+class IntermediateResidualBlock(Module):
+    """
+    Depthwise 1D residual block used in angular interpolation.
+    """
+    def __init__(self, channels):
+        super().__init__()
+        self.block = Sequential(
+            Conv1d(channels, channels, kernel_size=3, padding=1, groups=channels, bias=True),
+            BatchNorm1d(channels),
+            PReLU()
+        )
+
+    def forward(self, x):
+        return x + self.block(x)
+
+
+class DenoisingResidualBlock(Module):
+    """
+    2D residual block for image denoising.
+    """
+    def __init__(self, channels):
+        super().__init__()
+        self.block = Sequential(
+            Conv2d(channels, channels, kernel_size=3, padding=1, bias=True),
+            ReLU(inplace=True),
+            Conv2d(channels, channels, kernel_size=3, padding=1, bias=True)
+        )
+
+    def forward(self, x):
+        return torch.clamp(x + self.block(x), 0, 1)
+
 
 class DeepFBPNetwork(Module):
     """
-    Neural network implementation of the Deep Filtered Backprojection (DeepFBP) model for CT reconstruction.
+    Deep Filtered Backprojection Network for CT reconstruction.
 
-    The architecture consists of:
-    - A learnable frequency-domain filter module.
-    - Depthwise 1D convolutional interpolation blocks for each angle.
-    - A differentiable backprojection layer via Tomosipo.
-    - A 2D CNN-based denoising network for image refinement.
+    Pipeline:
+        - Learnable frequency filter (Ram-Lak based init)
+        - Angular interpolation via depthwise convolutions
+        - Differentiable backprojection (Tomosipo)
+        - Residual CNN-based denoiser
 
     Args:
         num_detectors (int): Number of detector bins.
         num_angles (int): Number of projection angles.
-        A (ts.Operator): Tomosipo forward projection operator.
-        filter_type (str): Filtering mode. "Filter I" for shared filter, any other for per-angle.
-
-    Attributes:
-        learnable_filter (LearnableFilter): Trainable frequency-domain filter module.
-        interpolator_{1-3} (Sequential): Depthwise residual blocks for angular interpolation.
-        interpolator_conv (Conv1d): Final angular smoothing convolution.
-        denoising_conv_1 (Conv2d): Initial conv layer in the denoising CNN.
-        denoising_res_{1-3} (Sequential): Intermediate residual conv blocks.
-        denoising_conv_2 (Conv2d): Final output conv layer of the denoiser.
+        A (ts.Operator): Tomosipo projection operator.
+        filter_type (str): Either 'Filter I' (shared) or per-angle.
+        device (torch.device): Computation device.
     """
-    def __init__(self, num_detectors, num_angles, A, filter_type):
-        # initilize parameter from parent clase Module
+    def __init__(self, num_detectors, num_angles, A, filter_type, device):
         super().__init__()
 
-        #Initilize all attributes for this class
         self.num_detectors = num_detectors
-        self.num_angles_modulo = num_angles
-        self.A_modulo = A
-        self.filter_type = filter_type
-        self.AT = to_autograd(self.A_modulo.T, is_2d=True, num_extra_dims=2)
+        self.num_angles = num_angles
+        self.device = device
+        self.A = A
+        self.AT = to_autograd(self.A.T, is_2d=True, num_extra_dims=2)
 
-
-        #Scan parameters from the paper and data
+        # Padding parameters
         self.projection_size_padded = self.compute_projection_size_padded()
         self.padding = self.projection_size_padded - self.num_detectors
-        
-        
-        # initilize filter as ram-lak filter
+
+        # Initialize Ram-Lak filter in frequency domain
         ram_lak = self.ram_lak_filter(self.projection_size_padded)
-        print(f"ram_lak.shape = {ram_lak.shape}")
-
-        #create the filter from the class
-        if self.filter_type == "Filter I":
-            self.learnable_filter = LearnableFilter(ram_lak.clone().float(), per_angle=False)
+        if filter_type == "Filter I":
+            self.learnable_filter = LearnableFilter(ram_lak, per_angle=False)
         else:
-            self.learnable_filter = LearnableFilter(ram_lak.clone().float(), per_angle=True, num_angles=self.num_angles_modulo)
+            self.learnable_filter = LearnableFilter(ram_lak, per_angle=True, num_angles=num_angles)
 
-        print(f"Filter weights shape = {self.learnable_filter.weights.shape}")
+        # Interpolation blocks
+        self.interpolator_1 = IntermediateResidualBlock(1)
+        self.interpolator_2 = IntermediateResidualBlock(1)
+        self.interpolator_3 = IntermediateResidualBlock(1)
+        self.interpolator_conv = Conv1d(1, 1, kernel_size=3, padding=1, bias = False)
 
-        #initilize interpolator
-        self.interpolator_1 = intermediate_residual_block(1)
-        self.interpolator_2 = intermediate_residual_block(1)
-        self.interpolator_3 = intermediate_residual_block(1)
-        self.interpolator_conv = Conv1d(1, 1, kernel_size=3, stride=1, padding=1)
+        # Tomosipo normalization map (1s projection)
+        sinogram_ones = torch.ones((1, num_angles, num_detectors), device=self.device)
+        self.tomosipo_normalizer = self.AT(sinogram_ones) + 1e-6
 
-        # move range of image to [0,1]
-        self.denoising_output_normalizer = Conv2d(1, 1, kernel_size=1, bias=True)
-        torch.nn.init.constant_(self.denoising_output_normalizer.weight, 1.0)
-        torch.nn.init.constant_(self.denoising_output_normalizer.bias, 0.0)
-
-        #initilize denoising part
-        self.denoising_conv_1 = Conv2d(1, 64, kernel_size=1, stride=1, padding=0, bias=True)
+        # Denoising blocks
+        self.denoising_conv_1 = Conv2d(1, 64, kernel_size=1)
         self.denoising_conv_2 = Conv2d(64, 64, kernel_size=3, padding=1)
-        self.denoising_res_1 = denoising_residual_block(64)
-        self.denoising_res_2 = denoising_residual_block(64)
-        self.denoising_res_3 = denoising_residual_block(64)
-        # to mantain the image in the range [0,1]
-        self.denoising_conv_3 = Sequential(
-            Conv2d(64, 1, kernel_size=3, stride=1, padding=1, bias=True),
+        self.denoising_res_1 = DenoisingResidualBlock(64)
+        self.denoising_res_2 = DenoisingResidualBlock(64)
+        self.denoising_res_3 = DenoisingResidualBlock(64)
+        self.denoising_output = Sequential(
+            Conv2d(64, 1, kernel_size=3, padding=1),
             Hardtanh(0, 1)
         )
 
-
-
     def compute_projection_size_padded(self):
         """
-        Calcula el tamaño de padding como la siguiente potencia de 2 mayor que 2 * num_detectors.
+        Computes the next power-of-two padding size to avoid aliasing.
         """
-        size = self.num_detectors
-        power = size.bit_length() 
-        return max(64, 2 ** power)
-    
+        return max(64, 2 ** (self.num_detectors * 2).bit_length())
 
     def ram_lak_filter(self, size):
         """
-        Create the Ram-Lak filter directly in the frequency domain as |ω| over the FFT frequencies.
+        Generates Ram-Lak filter directly in frequency domain.
         """
-        steps = int(size / 2 + 1)
-        ramp = torch.linspace(0, 1, steps, dtype=torch.float32)
-        down = torch.linspace(1, 0, steps, dtype=torch.float32)
-        f = torch.cat([ramp, down[:-2]])
-        return f
-    
-
+        freqs = torch.fft.fftfreq(size)
+        return torch.abs(freqs)
+            
     def forward(self, x):
-        """
-        Executes the forward pass through the DeepFBPNetwork.
 
-        The pipeline includes:
-            - Learnable filtering in the frequency domain
-            - Angular interpolation using depthwise convolutions
-            - Differentiable backprojection via tomosipo operator
-            - Denoising using a 2D CNN
 
-        Args:
-            x (torch.Tensor): Input sinogram of shape (B, 1, A, D), where:
-                B = batch size,
-                A = number of projection angles,
-                D = number of detectors.
+        print(f" shape inicial {x.shape}")
+        max_val = x[0,0].max()
+        min_val =  x[0,0].min()
+        plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
+        plt.title(f"Sinograma inicial vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
+        plt.savefig("sinograma_inicial.png")
+        plt.close()
 
-        Returns:
-            torch.Tensor: Reconstructed CT image of shape (B, 1, H, W).
-        """
-        #print(f" shape inicial {x.shape}")
-        #max_val = x[0,0].max()
-        #min_val =  x[0,0].min()
-        #plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
-        #plt.title(f"Sinograma inicial vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        #plt.savefig("sinograma_inicial.png")
-        #plt.close()
+        images1 = self.AT(x)  
 
-        #images1 = self.AT(x)  
+        img_np = images1[0].squeeze().detach().cpu().numpy()
+        max_val = img_np.max()
 
-        #img_np = images1[0].squeeze().detach().cpu().numpy()
-        #max_val = img_np.max()
-
-        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
         # Imagen con vmin/vmax
-        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        #axs[0].set_title(f"Tomosipo inicial vmin/vmax (max={max_val:.4f})")
-        #axs[0].axis("off")
+        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        axs[0].set_title(f"Tomosipo inicial vmin/vmax (max={max_val:.4f})")
+        axs[0].axis("off")
 
         # Imagen sin vmin/vmax
-        #axs[1].imshow(img_np, cmap='gray')
-        #axs[1].set_title(f"Tomosipo inicial auto escala (max={max_val:.4f})")
+        axs[1].imshow(img_np, cmap='gray')
+        axs[1].set_title(f"Tomosipo inicial auto escala (max={max_val:.4f})")
         #axs[1].axis("off")
 
-        #plt.tight_layout()
-        #plt.savefig("imagen_tomosipo_inicial.png")
-        #plt.close()
+        plt.tight_layout()
+        plt.savefig("imagen_tomosipo_inicial.png")
+        plt.close()
 
-        # apply padding to avoid aliasing 
-        x = x.squeeze(1)
-        x = pad(x, (0, self.padding), mode="constant", value=0)  # Padding al final de la dimensión de detectores
-        #print(f" shape padding {x.shape}")
 
-        #assert x.shape[-1] == self.projection_size_padded, \
-        #    f"Expected input with padding {self.projection_size_padded}, got {x.shape[-1]}"
 
-        #max_val = x[0].max()
-        #min_val =  x[0].min()
-        #plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
-        #plt.title(f"Sinograma padding vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        #plt.savefig("sinograma_padding.png")
-        #plt.close()
 
-        # Apply filter for frequency domain and recover the original sinogram
-        x1 = self.learnable_filter(x)
-        x1 = x1[..., :self.num_detectors]
-        #x_img = x1.unsqueeze(1)
-        #images1 = self.AT(x_img)  
+        # Initial shape: [B, 1, A, D]
+        x = x.squeeze(1)  # [B, A, D]
+        x = pad(x, (0, self.padding), mode="constant", value=0)
+        x = self.learnable_filter(x)
+        x = x[..., :self.num_detectors]  # Remove padding
 
-        #img_np = images1[0].squeeze().detach().cpu().numpy()
-        #max_val = img_np.max()
 
-        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        x_img = x.unsqueeze(1)
+        images1 = self.AT(x_img)  
+
+        img_np = images1[0].squeeze().detach().cpu().numpy()
+        max_val = img_np.max()
+
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
         # Imagen con vmin/vmax
-        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        #axs[0].set_title(f"Tomosipo filtrado vmin/vmax (max={max_val:.4f})")
-        #axs[0].axis("off")
+        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        axs[0].set_title(f"Tomosipo filtrado vmin/vmax (max={max_val:.4f})")
+        axs[0].axis("off")
 
         # Imagen sin vmin/vmax
-        #axs[1].imshow(img_np, cmap='gray')
-        #axs[1].set_title(f"Tomosipo filtrado auto escala (max={max_val:.4f})")
-        #axs[1].axis("off")
+        axs[1].imshow(img_np, cmap='gray')
+        axs[1].set_title(f"Tomosipo filtrado auto escala (max={max_val:.4f})")
+        axs[1].axis("off")
 
-        #plt.tight_layout()
-        #plt.savefig("imagen_tomosipo_filtrado.png")
-        #plt.close()
+        plt.tight_layout()
+        plt.savefig("imagen_tomosipo_filtrado.png")
+        plt.close()
 
-        #max_val = x1[0].max()
-        #min_val =  x1[0].min()
-        #plt.imshow(x1[0].detach().cpu().numpy(), cmap='gray')
-        #plt.title(f"Sinograma filtrado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        #plt.savefig("sinograma_filtrado.png")
-        #plt.close()
-        
-        # we assum x1: [B, A, D]
-        x1 = x1.reshape(-1, 1, self.num_detectors)  # [B*A, 1, D]
+        max_val = x[0].max()
+        min_val =  x[0].min()
+        plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
+        plt.title(f"Sinograma filtrado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
+        plt.savefig("sinograma_filtrado.png")
+        plt.close()
 
-        # apply residual blocks
-        x2 = self.interpolator_1(x1)
-        x3 = self.interpolator_2(x2)
-        x4 = self.interpolator_3(x3)
-        x5 = self.interpolator_conv(x4)
 
-        x5 = x5.view(-1, self.num_angles_modulo, self.num_detectors)
-        x5 = x5.unsqueeze(1)               # [B, 1, A, D]
 
-        #max_val = x5[0,0].max()
-        #min_val =  x5[0,0].min()
-        #plt.imshow(x5[0,0].detach().cpu().numpy(), cmap='gray')
-        #plt.title("Sinograma interpolado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f}")
-        #plt.savefig("sinograma_interpolado.png")
-        #plt.close()
+
+        # Interpolation network
+        x = x.reshape(-1, 1, self.num_detectors)
+        x = self.interpolator_1(x)
+        x = self.interpolator_2(x)
+        x = self.interpolator_3(x)
+        x = self.interpolator_conv(x)
+        x = x.view(-1, self.num_angles, self.num_detectors).unsqueeze(1)
+
+
+
+
+
+
+        max_val = x[0,0].max()
+        min_val =  x[0,0].min()
+        plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
+        plt.title(f"Sinograma interpolado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f}")
+        plt.savefig("sinograma_interpolado.png")
+        plt.close()
     
-        # A.T() only accepts [1, A, D] so we iterate by batch
-        images = self.AT(x5)  
+        # backpropagation with tomosipo
+        images = self.AT(x)  
 
-        #img_np = images[0].squeeze().detach().cpu().numpy()
-        #max_val = img_np.max()
 
-        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
-        # Imagen con vmin/vmax
-        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        #axs[0].set_title(f"Tomosipo vmin/vmax (max={max_val:.4f})")
-        #axs[0].axis("off")
 
-        # Imagen sin vmin/vmax
-        #axs[1].imshow(img_np, cmap='gray')
-        #axs[1].set_title(f"Tomosipo auto escala (max={max_val:.4f})")
-        #axs[1].axis("off")
 
-        #plt.tight_layout()
-        #plt.savefig("imagen_tomosipo.png")
-        #plt.close()
+        img_np = images[0].squeeze().detach().cpu().numpy()
+        max_val = img_np.max()
 
-        # normalised output to the 0-1 range
-        images = self.denoising_output_normalizer(images)
-
-        #img_np = images[0].squeeze().detach().cpu().numpy()
-        #max_val = img_np.max()
-
-        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
         # Imagen con vmin/vmax
-        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        #axs[0].set_title(f"Tomosipo normalised vmin/vmax (max={max_val:.4f})")
-        #axs[0].axis("off")
+        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        axs[0].set_title(f"Tomosipo vmin/vmax (max={max_val:.4f})")
+        axs[0].axis("off")
 
         # Imagen sin vmin/vmax
-        #axs[1].imshow(img_np, cmap='gray')
-        #axs[1].set_title(f"Tomosipo auto escala normalised (max={max_val:.4f})")
-        #axs[1].axis("off")
+        axs[1].imshow(img_np, cmap='gray')
+        axs[1].set_title(f"Tomosipo auto escala (max={max_val:.4f})")
+        axs[1].axis("off")
 
-        #plt.tight_layout()
-        #plt.savefig("imagen_tomosipo_normalised.png")
-        #plt.close()
+        plt.tight_layout()
+        plt.savefig("imagen_tomosipo.png")
+        plt.close()
 
-        # apply denoiser to the output image
-        x6 = self.denoising_conv_1(images)
-        x7 = self.denoising_conv_2(x6)
-        x8 = self.denoising_res_1(x7)
-        x9 = self.denoising_res_2(x8)
-        x10 = self.denoising_res_3(x9)
-        x11 = self.denoising_conv_3(x10)
 
-        #img_np = x11[0].squeeze().detach().cpu().numpy()
-        #max_val = img_np.max()
 
-        #fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+
+
+
+        # Differentiable backprojection
+        img = self.AT(x)
+        img = img / self.tomosipo_normalizer
+
+
+
+
+
+        img_np = images[0].squeeze().detach().cpu().numpy()
+        max_val = img_np.max()
+
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
         # Imagen con vmin/vmax
-        #axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        #axs[0].set_title(f"Denoiser vmin/vmax (max={max_val:.4f})")
-        #axs[0].axis("off")
+        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        axs[0].set_title(f"Tomosipo normalised vmin/vmax (max={max_val:.4f})")
+        axs[0].axis("off")
 
         # Imagen sin vmin/vmax
-        #axs[1].imshow(img_np, cmap='gray')
-        #axs[1].set_title(f"Denoiser auto escala (max={max_val:.4f})")
-        #axs[1].axis("off")
+        axs[1].imshow(img_np, cmap='gray')
+        axs[1].set_title(f"Tomosipo auto escala normalised (max={max_val:.4f})")
+        axs[1].axis("off")
 
-        #plt.tight_layout()
-        #plt.savefig("imagen_denoiser.png")
-        #plt.close()
-
-        return x11
+        plt.tight_layout()
+        plt.savefig("imagen_tomosipo_normalised.png")
+        plt.close()
 
 
-class intermediate_residual_block(Module):
-    """
-    Create a depthwise 1D residual convolutional block for interpolation.
 
-    Args:
-        channels (int): Number of input/output channels (usually equal to num_angles).
 
-    Returns:
-        torch.nn.Sequential: A depthwise residual block.
-    """
-    def __init__(self, channels):
-        super().__init__()
-        self.conv = Conv1d(channels, channels, kernel_size=3, stride=1, padding=1, groups=channels,bias=True)
-        self.bn =  BatchNorm1d(channels)
-        self.prelu = PReLU()
 
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.bn(out)
-        out = self.prelu(out)
-        return x + out
+
+
+        # Denoising network
+        x = self.denoising_conv_1(img)
+        x = self.denoising_conv_2(x)
+        x = self.denoising_res_1(x)
+        x = self.denoising_res_2(x)
+        x = self.denoising_res_3(x)
+
+
+
+
+
+        img_np = x[0].squeeze().detach().cpu().numpy()
+        max_val = img_np.max()
+
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+
+        # Imagen con vmin/vmax
+        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
+        axs[0].set_title(f"Denoiser vmin/vmax (max={max_val:.4f})")
+        axs[0].axis("off")
+
+        # Imagen sin vmin/vmax
+        axs[1].imshow(img_np, cmap='gray')
+        axs[1].set_title(f"Denoiser auto escala (max={max_val:.4f})")
+        axs[1].axis("off")
+
+        plt.tight_layout()
+        plt.savefig("imagen_denoiser.png")
+        plt.close()
+
+
+
+
+
+        return self.denoising_output(x)
+    
     
 
 
-class denoising_residual_block(Module):
-    """
-    Create a residual block used in the denoising stage.
-
-    Args:
-        in_channels (int): Number of input and output channels.
-
-    Returns:
-        torch.nn.Sequential: A 2-layer convolutional residual block.
-    """
-    def __init__(self, channels):
-        super().__init__()
-        self.conv = Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=True)
-        self.relu =  ReLU(inplace=True)
-        self.conv2 = Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=True)
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.relu(out)
-        out = self.conv2(out)
-        x2 = x + out
-        return torch.clamp(x2, 0, 1)
-    
 
 class DeepFBP(ModelBase):
     """
@@ -386,7 +385,7 @@ class DeepFBP(ModelBase):
         self.A_deepfbp, self.pg_deepfbp, self.num_angles_deepfbp = self._build_projection_operator()
 
 
-        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type)
+        self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type, self.device)
 
 
     def _build_projection_operator(self):
@@ -440,18 +439,15 @@ class DeepFBP(ModelBase):
         for param in self.model.parameters():
             param.requires_grad = False
 
-        # Always train the output normalizer and the filter
-        for param in self.model.denoising_output_normalizer.parameters():
-            param.requires_grad = True
-
+        # Always train the filter
         for param in self.model.learnable_filter.parameters():
                 param.requires_grad = True
 
         if phase == 1:
-            self._log("[TrainPhase] Activating learnable filter and output normalizer")
+            self._log("[TrainPhase] Activating learnable filter ")
 
         elif phase == 2:
-            self._log("[TrainPhase] Activating filter, interpolators, and output normalizer")
+            self._log("[TrainPhase] Activating filter and interpolators")
             for interpolator in [self.model.interpolator_1, self.model.interpolator_2,
                                 self.model.interpolator_3, self.model.interpolator_conv]:
                 for param in interpolator.parameters():
@@ -529,61 +525,3 @@ class DeepFBP(ModelBase):
             json.dump(config, f, indent=4)
 
         self._log(f"[DeepFBP] Configuration saved to: {self.model_path}_config.json")
-
-
-class LearnableFilter(Module):
-    """
-    Learnable frequency-domain filter module for CT sinograms.
-
-    This module replaces traditional analytical filters (e.g., Ram-Lak)
-    with trainable parameters. Can operate in shared or per-angle mode.
-
-    Args:
-        init_filter (torch.Tensor): Initial frequency-domain filter (1D).
-        per_angle (bool): If True, create one filter per projection angle.
-        num_angles (int, optional): Required if `per_angle=True`.
-
-    Attributes:
-        weights (nn.Parameter): Filter weights in the frequency domain.
-
-    Raises:
-        AssertionError: If `per_angle=True` and `num_angles` is not provided.
-    """
-
-    def __init__(self, init_filter, per_angle=False, num_angles=None):
-        super().__init__()
-        self.per_angle = per_angle
-
-        if self.per_angle:
-            assert num_angles is not None, "num_angles must be provided when per_angle=True"
-            filters = torch.stack([init_filter.clone().detach() for _ in range(num_angles)])
-            self.register_parameter("weights", Parameter(filters))
-        else:
-            self.register_parameter("weights", Parameter(init_filter))
-
-
-    def forward(self, x):
-        """
-        Apply the learnable frequency-domain filter to the input sinogram.
-
-        Args:
-            x (torch.Tensor): Input sinogram of shape (B, A, D).
-
-        Returns:
-            torch.Tensor: Filtered sinogram of same shape.
-
-        Example:
-            >>> filtered = filter_module(x)
-        """
-
-        # convert sinogram to frequency domain
-        ftt1d = torch.fft.fft(x, dim=-1)
-
-        # apply de filter
-        if self.per_angle:
-            filtered = ftt1d * self.weights[None, :, :]
-        else:
-            filtered = ftt1d * self.weights[None, None, :]
-        
-        # retorn the filtered sinogram 
-        return torch.fft.ifft(filtered, dim=-1).real

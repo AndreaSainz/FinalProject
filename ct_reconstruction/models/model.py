@@ -6,8 +6,8 @@ from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ..datasets.dataset import LoDoPaBDataset
 from ..callbacks.early_stopping import EarlyStopping
-from ..utils.metrics import compute_psnr, compute_ssim, compute_psnr_results
-from ..utils.plotting import show_example, plot_metric, plot_different_reconstructions, show_example_epoch
+from ..utils.metrics import compute_psnr, compute_ssim, compute_psnr_results, compute_mse
+from ..utils.plotting import show_example, plot_metric, plot_different_reconstructions, show_example_epoch, plot_results_distributions
 from ..utils.loggers import configure_logger
 from torch.utils.data import DataLoader
 import time
@@ -557,7 +557,7 @@ class ModelBase(Module):
             sample = next(iter(train_dataloader))["sparse_sinogram"]
         else:
             sample = next(iter(train_dataloader))["noisy_sinogram"]
-        summary(self.model, input_size=tuple(sample.shape[1:])) #just for debugging
+        #summary(self.model, input_size=tuple(sample.shape[1:])) #just for debugging
 
         # confirmation for the model to be train 
         if confirm_train:
@@ -1121,188 +1121,109 @@ class ModelBase(Module):
             "nag_ls": rec_nag_ls}
 
 
-
-
-    def report_results_images(self, save_path, samples, num_iterations_sirt=100, num_iterations_em= 100, num_iterations_tv_min=100, num_iterations_nag_ls = 100, lamda = 0.0001):
+    def evaluate_and_visualize(self, save_path, samples=None, test_path=None, max_len_test=None,
+                                num_iterations_sirt=100, num_iterations_em=100,
+                                num_iterations_tv_min=100, num_iterations_nag_ls=100,
+                                lamda=0.0001, only_results=False):
         """
-        Generates and saves visual comparisons of reconstructions across methods.
-
-        For each selected test sample, displays the ground truth, model prediction,
-        and results from classical methods (FBP, SIRT, EM, TV-Min, NAG-LS).
+        Combines image reporting and metric aggregation into a single function.
+        Computes and optionally visualizes CT reconstruction results.
 
         Args:
-            save_path (str): Prefix path to save output figures.
-            samples (list[int]): Indices of test samples to visualize.
+            save_path (str): Path prefix for saving outputs.
+            samples (list[int], optional): Indices of test samples to visualize.
+            test_path (str, optional): Test dataset path (required if only_results=True).
+            max_len_test (int, optional): Number of test samples (required if only_results=True).
             num_iterations_sirt (int): Iterations for SIRT.
             num_iterations_em (int): Iterations for EM.
             num_iterations_tv_min (int): Iterations for TV minimization.
             num_iterations_nag_ls (int): Iterations for NAG-LS.
-            lamda (float): TV regularization parameter.
+            lamda (float): Regularization weight for TV.
+            only_results (bool): If True, recompute metrics from dataset.
 
-        Raises:
-            RuntimeError: If required prediction, GT or sinogram files are missing.
-
-        Example:
-            >>> model.report_results_images('out/visuals', samples=[0, 5, 10])
-        """
-        
-        if not self.trained:
-            self._log(f"This model is not trained yet.",  level='warning')
-            return
-
-        # handling file path error
-        if not os.path.exists(f"{self.model_path}_predictions_images.pt"):
-            self._log("Prediction .pt files not found", level="error")
-            return
-        elif not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
-            self._log("Ground truth .pt files not found", level="error")
-            return
-        elif not (self.sparse_view or self.single_bp) and not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
-            self._log("Noisy sinograms .pt files not found", level="error")
-            return
-        elif (self.sparse_view or self.single_bp) and not os.path.exists(f"{self.model_path}_sparse_sinograms.pt"):
-            self._log("Sparse-view sinograms .pt files not found", level="error")
-        else:
-            predictions = torch.load(f"{self.model_path}_predictions_images.pt")
-            ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
-            if self.sparse_view or self.single_bp:
-                sinograms = torch.load(f"{self.model_path}_sparse_sinograms.pt") 
-            else:
-                sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
-
-        # calculate de A operator for tomosipo 
-        A = self._get_operator()
-
-        # generate and save all plots (model reconstructed image, gt image and classical methods reconstrucstions)
-        for sample in samples:
-            reconstructions_dict = self.other_ct_reconstruction(sinograms[sample], A, num_iterations_sirt, num_iterations_em, num_iterations_tv_min, num_iterations_nag_ls, lamda)
-            plot_different_reconstructions(self.model_type, sample, reconstructions_dict, predictions[sample], ground_truths[sample], save_path)
-
-
-
-    def report_results_table(self, save_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,
-                         num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False):
-        """
-        Computes average PSNR and SSIM for classical reconstruction algorithms on the test set.
-
-        If `only_results=True`, recomputes from raw test sinograms and GT using reconstruction algorithms.
-        Otherwise, loads saved prediction and sinogram files from disk.
-
-        Args:
-            save_path (str): Path prefix for saving the CSV file.
-            test_path (str): Test dataset path (required if only_results=True).
-            max_len_test (int): Number of test samples (required if only_results=True).
-            num_iterations_sirt (int): Iterations for SIRT algorithm.
-            num_iterations_em (int): Iterations for EM algorithm.
-            num_iterations_tv_min (int): Iterations for TV minimization.
-            num_iterations_nag_ls (int): Iterations for NAG-LS.
-            lamda (float): Regularization weight for TV minimization.
-            only_results (bool): If True, re-evaluate directly from dataset instead of loading saved .pt files.
-
-        Raises:
-            ValueError: If required arguments are missing when only_results=True.
-
-        Example:
-            >>> model.report_results_table('results/classical', test_path='data/test', max_len_test=256, only_results=True)
+        Returns:
+            pd.DataFrame: DataFrame containing all PSNR/SSIM values per sample and method.
         """
 
-        metrics = {
-            "Algorithm": ["FBP", "SIRT", "EM", "TV-Min", "NAG-LS"],
-            "PSNR": [0] * 5,
-            "SSIM": [0] * 5
-        }
+        psnr_data, ssim_data, mse_data= [], [], []
 
         if only_results:
-            if test_path is None:
-                raise ValueError("When only_results=True, test_path must be provided.")
+            if test_path is None or max_len_test is None:
+                raise ValueError("When only_results=True, test_path and max_len_test must be provided.")
 
-            n_samples = max_len_test
-
-            #changing paths parameters
             self.test_path = test_path
             self.max_len_test = max_len_test
-
-            # get test data loader
             test_dataloader = self._get_test_dataloaders()
             test_dataloader = self.accelerator.prepare(test_dataloader)
-
-            # calculate de A operator for tomosipo 
             A = self._get_operator()
 
             for batch in tqdm(test_dataloader):
-                # send the input to the device
                 ground_truth = batch['ground_truth']
-                if self.sparse_view or self.single_bp:
-                    sino = batch['sparse_sinogram']
-                else:
-                    sino = batch['noisy_sinogram']
+                sino = batch['sparse_sinogram'] if (self.sparse_view or self.single_bp) else batch['noisy_sinogram']
 
-                recon_dict = self.other_ct_reconstruction(sino, A, num_iterations_sirt=num_iterations_sirt, num_iterations_em=num_iterations_em, num_iterations_tv_min=num_iterations_tv_min, num_iterations_nag_ls=num_iterations_nag_ls, lamda=lamda)
-
-                metrics["PSNR"][0] += compute_psnr_results(recon_dict["fbp"], ground_truth, 1)
-                metrics["PSNR"][1] += compute_psnr_results(recon_dict["sirt"], ground_truth, 1)
-                metrics["PSNR"][2] += compute_psnr_results(recon_dict["em"], ground_truth, 1)
-                metrics["PSNR"][3] += compute_psnr_results(recon_dict["tv_min"], ground_truth, 1)
-                metrics["PSNR"][4] += compute_psnr_results(recon_dict["nag_ls"], ground_truth, 1)
-
-                metrics["SSIM"][0] += compute_ssim(recon_dict["fbp"], ground_truth, 1)
-                metrics["SSIM"][1] += compute_ssim(recon_dict["sirt"], ground_truth, 1)
-                metrics["SSIM"][2] += compute_ssim(recon_dict["em"], ground_truth, 1)
-                metrics["SSIM"][3] += compute_ssim(recon_dict["tv_min"], ground_truth, 1)
-                metrics["SSIM"][4] += compute_ssim(recon_dict["nag_ls"], ground_truth, 1)
-
+                recon_dict = self.other_ct_reconstruction(sino, A, num_iterations_sirt, num_iterations_em,
+                                                        num_iterations_tv_min, num_iterations_nag_ls, lamda)
+                for method, recon in recon_dict.items():
+                    mse_data.append({"Algorithm": method.upper(), "MSE": compute_mse(recon, ground_truth)})
+                    psnr_data.append({"Algorithm": method.upper(), "PSNR": compute_psnr_results(recon, ground_truth, 1)})
+                    ssim_data.append({"Algorithm": method.upper(), "SSIM": compute_ssim(recon, ground_truth, 1)})
 
         else:
-            # File existence checks
-            if not os.path.exists(f"{self.model_path}_ground_truth_images.pt"):
-                self._log("Ground truth .pt files not found", level="error")
+            if not os.path.exists(f"{self.model_path}_ground_truth_images.pt") or \
+            not os.path.exists(f"{self.model_path}_predictions_images.pt"):
+                self._log("Ground truth or prediction .pt files not found", level="error")
                 return
-            if not  (self.sparse_view or self.single_bp) and not os.path.exists(f"{self.model_path}_noisy_sinograms.pt"):
-                self._log("Noisy sinograms .pt files not found", level="error")
-                return
-            if  (self.sparse_view or self.single_bp) and not os.path.exists(f"{self.model_path}_sparse_sinograms.pt"):
-                self._log("Sparse-view sinograms .pt files not found", level="error")
-                return
-            
-            # Load data
-            ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
-            if self.sparse_view or self.single_bp:
-                sinograms = torch.load(f"{self.model_path}_sparse_sinograms.pt")
-            else:
-                sinograms = torch.load(f"{self.model_path}_noisy_sinograms.pt")
-            n_samples = len(sinograms)
 
-            # calculate de A operator for tomosipo 
+            sinogram_file = f"{self.model_path}_sparse_sinograms.pt" if (self.sparse_view or self.single_bp) \
+                            else f"{self.model_path}_noisy_sinograms.pt"
+
+            if not os.path.exists(sinogram_file):
+                self._log("Sinogram .pt files not found", level="error")
+                return
+
+            ground_truths = torch.load(f"{self.model_path}_ground_truth_images.pt")
+            predictions = torch.load(f"{self.model_path}_predictions_images.pt")
+            sinograms = torch.load(sinogram_file)
             A = self._get_operator()
 
-            for i in range(n_samples):
-                gt_image = ground_truths[i][0] if ground_truths[i].dim() == 4 else ground_truths[i]
-                recon_dict = self.other_ct_reconstruction( sinograms[i], A, num_iterations_sirt=num_iterations_sirt, num_iterations_em=num_iterations_em, num_iterations_tv_min=num_iterations_tv_min, num_iterations_nag_ls=num_iterations_nag_ls, lamda=lamda
-                )
+            for i, (sino, gt, pred) in enumerate(zip(sinograms, ground_truths, predictions)):
+                gt_img = gt[0] if gt.dim() == 4 else gt
+                pred_img = pred[0] if pred.dim() == 4 else pred
 
-                metrics["PSNR"][0] += compute_psnr_results(recon_dict["fbp"], gt_image, 1)
-                metrics["PSNR"][1] += compute_psnr_results(recon_dict["sirt"], gt_image, 1)
-                metrics["PSNR"][2] += compute_psnr_results(recon_dict["em"], gt_image, 1)
-                metrics["PSNR"][3] += compute_psnr_results(recon_dict["tv_min"], gt_image, 1)
-                metrics["PSNR"][4] += compute_psnr_results(recon_dict["nag_ls"], gt_image, 1)
+                recon_dict = self.other_ct_reconstruction(sino, A, num_iterations_sirt, num_iterations_em,
+                                                        num_iterations_tv_min, num_iterations_nag_ls, lamda)
+                # Add classical methods
+                for method, recon in recon_dict.items():
+                    mse_data.append({"Algorithm": method.upper(), "MSE": compute_mse(recon, gt_img)})
+                    psnr_data.append({"Algorithm": method.upper(), "PSNR": compute_psnr_results(recon, gt_img, 1)})
+                    ssim_data.append({"Algorithm": method.upper(), "SSIM": compute_ssim(recon, gt_img, 1)})
 
-                metrics["SSIM"][0] += compute_ssim(recon_dict["fbp"], gt_image, 1)
-                metrics["SSIM"][1] += compute_ssim(recon_dict["sirt"], gt_image, 1)
-                metrics["SSIM"][2] += compute_ssim(recon_dict["em"], gt_image, 1)
-                metrics["SSIM"][3] += compute_ssim(recon_dict["tv_min"], gt_image, 1)
-                metrics["SSIM"][4] += compute_ssim(recon_dict["nag_ls"], gt_image, 1)
+                # Add model prediction (DBP or DeepFBP)
+                mse_data.append({"Algorithm": self.model_type.upper(), "MSE": compute_mse(pred_img, gt_img)})
+                psnr_data.append({"Algorithm": self.model_type.upper(), "PSNR": compute_psnr_results(pred_img, gt_img, 1)})
+                ssim_data.append({"Algorithm": self.model_type.upper(), "SSIM": compute_ssim(pred_img, gt_img, 1)})
 
-        # Average metrics
-        metrics["PSNR"] = [val / n_samples for val in metrics["PSNR"]]
-        metrics["SSIM"] = [val / n_samples for val in metrics["SSIM"]]
+                if samples and i in samples:
+                    plot_different_reconstructions(self.model_type, i, recon_dict, pred_img, gt_img, save_path)
 
-        # Create DataFrame
-        df = pd.DataFrame(metrics)
+        df_psnr = pd.DataFrame(psnr_data)
+        df_ssim = pd.DataFrame(ssim_data)
+        df_mse = pd.DataFrame(mse_data)
+        df_psnr.to_csv(f"{save_path}_psnr_full.csv", index=False)
+        df_ssim.to_csv(f"{save_path}_ssim_full.csv", index=False)
+        df_mse.to_csv(f"{save_path}_mse_full.csv", index=False)
 
-        # Save as CSV
-        df.to_csv(f"{save_path}_reconstruction_metrics.csv", index=False)
+        # do distributions plotting
+        plot_results_distributions(save_path, df_psnr, df_ssim, df_mse)
 
-        self._log(f"Results table saved to {save_path}_reconstruction_metrics.csv", level="info")
+        # Save table with mean and standard deviation for all metrics and algortihms 
+        df_mean = df_psnr.groupby("Algorithm").mean().merge(df_ssim.groupby("Algorithm").mean(), on="Algorithm").merge(df_mse.groupby("Algorithm").mean(), on="Algorithm")
+        df_std = df_psnr.groupby("Algorithm").std().merge(df_ssim.groupby("Algorithm").std(), on="Algorithm").merge(df_mse.groupby("Algorithm").std(), on="Algorithm")
+        df_all = df_mean.merge(df_std, on="Algorithm")
+        df_all.to_csv(f"{save_path}_reconstruction_metrics.csv", index=False)
+
+        self._log(f"Full PSNR/SSIM/MSE distributions saved. Summary metrics saved to {save_path}_reconstruction_metrics.csv", level="info")
+
 
 
 

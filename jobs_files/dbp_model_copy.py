@@ -45,6 +45,7 @@ results = model_dbp.test(training_path, max_len_test)
 #getting plots and results
 model_dbp.results("both", 1, figure_path)
 samples = model_dbp.results("testing", 1, figure_path)
-model_dbp.report_results_images(figure_path, samples)
-model_dbp.report_results_table(figure_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,
-                         num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False)
+model_dbp.evaluate_and_visualize(figure_path, samples, test_path, max_len_test,
+                                num_iterations_sirt=100, num_iterations_em=100,
+                                num_iterations_tv_min=100, num_iterations_nag_ls=100,
+                                lamda=0.0001, only_results=False)

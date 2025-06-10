@@ -408,7 +408,7 @@ class LoDoPaBDataset(Dataset):
                                                                                 
         #Create single-back projections
         if self.single_bp:
-            single_back_projections = self._generate_single_backprojections(sinogram)
+            single_back_projections = self._generate_single_backprojections(noisy_sinogram)
             sinogram_sparse = noisy_sinogram[:, self.indices, :] 
             return {'ground_truth': sample_slice, 
             'sinogram': sinogram, 

@@ -113,3 +113,7 @@ def compute_ssim(reconstructed, ground_truth, data_range):
         
     # both inputs must be shape [B, C, H, W]
     return ssim(reconstructed, ground_truth, data_range).item()
+
+
+def compute_mse(pred, target):
+    return ((pred - target) ** 2).mean().item()

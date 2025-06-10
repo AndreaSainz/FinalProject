@@ -63,9 +63,10 @@ results = model_deepfbp.test(training_path, max_len_test)
 #getting plots and results
 model_deepfbp.results("both", 1, figure_path)
 samples = model_deepfbp.results("testing", 5, figure_path)
-model_deepfbp.report_results_images(figure_path, samples)
-model_deepfbp.report_results_table(figure_path, test_path, max_len_test, num_iterations_sirt=100, num_iterations_em=100,
-                         num_iterations_tv_min=100, num_iterations_nag_ls=100, lamda=0.0001, only_results = False)
+model_deepfbp.evaluate_and_visualize(figure_path, samples, test_path, max_len_test,
+                                num_iterations_sirt=100, num_iterations_em=100,
+                                num_iterations_tv_min=100, num_iterations_nag_ls=100,
+                                lamda=0.0001, only_results=False)
 plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=0, angle = 0, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_2000_filterII_0_phase3")
 plot_learned_filter(model_deepfbp.model.learnable_filter, angle_idx=500, angle = 90, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_2000_filterII_90_phase3")
 plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_2000_filterII_mean_phase3")

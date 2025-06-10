@@ -22,6 +22,29 @@ Example:
 
 import matplotlib.pyplot as plt
 import torch
+import seaborn as sns
+
+# Define a colorblind-friendly palette (Color Universal Design by Okabe & Ito)
+CUD_COLORS = [
+    "#000000",  # Black
+    "#E69F00",  # Orange
+    "#56B4E9",  # Sky Blue
+    "#009E73",  # Bluish Green
+    "#F0E442",  # Yellow
+    "#0072B2",  # Blue
+    "#D55E00",  # Vermilion
+    "#CC79A7",  # Reddish Purple
+]
+
+# Apply consistent style and font sizes for accessibility
+plt.style.use('seaborn-whitegrid')
+plt.rcParams.update({
+    "font.size": 12,
+    "axes.labelsize": 12,
+    "axes.titlesize": 14,
+    "legend.fontsize": 10,
+})
+
 
 def show_example(output_img, ground_truth):
     """
@@ -46,6 +69,7 @@ def show_example(output_img, ground_truth):
     axes[0].set_title('Reconstruction')
     axes[1].imshow(ground_truth.squeeze().cpu(), cmap='gray', vmin=0, vmax=1)
     axes[1].set_title('Ground Truth')
+    plt.axis('off')
     plt.tight_layout()
     plt.show()
 
@@ -71,6 +95,7 @@ def show_example_epoch(output_img, ground_truth, epoch, save_path=None):
     axes[1].imshow(ground_truth.squeeze().detach().cpu(), cmap='gray', vmin=0, vmax=1)
     axes[1].set_title(f"Ground Truth in epoch {epoch}")
     plt.tight_layout()
+    plt.axis('off')
     
     if save_path:
         plt.savefig(f"{save_path}_{epoch}.png")
@@ -103,11 +128,11 @@ def plot_metric(x, y_dict, title, xlabel, ylabel, test_value=None, save_path=Non
     plt.figure()
 
     # go through the dictionary to plot the data
-    for label, y in y_dict.items():
-        plt.plot(x, y, label=label)
+    for i, (label, y) in enumerate(y_dict.items()):
+        plt.plot(x, y, label=label, color=CUD_COLORS[i % len(CUD_COLORS)])
 
     if test_value is not None:
-        plt.axhline(y=test_value, color='red', linestyle='--', label='Test')
+        plt.axhline(y=test_value, color=CUD_COLORS[6], linestyle='--', label='Test')
 
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -120,6 +145,61 @@ def plot_metric(x, y_dict, title, xlabel, ylabel, test_value=None, save_path=Non
     
     plt.close()
 
+def plot_learned_filter(filter_module, angle_idx=None, angle=None, title=None, save_path="figures/"):
+    """
+    Plots the learned frequency-domain filter from a LearnableFilter module.
+
+    Supports both shared filters and per-angle filters. If per-angle and angle_idx is not provided,
+    plots the mean filter across all angles.
+
+    Args:
+        filter_module (LearnableFilter): Instance of the LearnableFilter class.
+        angle_idx (int, optional): Index of the angle to visualize (used in per-angle mode).
+        angle (int, optional): Angle label for title purposes.
+        title (str, optional): Custom title for the plot.
+        save_path (str): Base path for saving the plotted figure.
+    """
+
+    weights = filter_module.weights
+
+    if filter_module.per_angle:
+        filter_type = "FilterII"
+        if angle_idx is not None:
+            weights = weights[angle_idx]
+            default_title = f"Filter II for Angle Index {angle}"
+            file_suffix = f"{filter_type}_{angle}"
+        else:
+            # Compute mean filter across all angles
+            weights = weights.mean(dim=0)
+            default_title = "Mean Filter II over all angles"
+            file_suffix = f"{filter_type}_mean"
+    else:
+        filter_type = "FilterI"
+        default_title = "Shared Filter I (all angles)"
+        file_suffix = f"{filter_type}"
+
+    # Prepare weights for plotting
+    if weights.ndim > 1:
+        weights = weights.squeeze()
+    weights = weights.detach()
+
+    D = len(weights)
+    freqs = torch.fft.fftshift(torch.fft.fftfreq(D))
+    filter_shifted = torch.fft.fftshift(weights)
+
+    freqs_np = freqs.cpu().numpy()
+    filter_np = filter_shifted.cpu().numpy()
+
+    plt.figure(figsize=(6, 4))
+    plt.fill_between(freqs_np, 0, filter_np, color="steelblue")
+    plt.xlabel("frequency")
+    plt.ylabel("amplitude")
+    plt.title(title if title else default_title)
+    plt.ylim(0, 1.0)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"{save_path}_{file_suffix}.png")
+    plt.close()
 
 def plot_different_reconstructions(model_type, sample, recon_dict, output_img, ground_truth, save_path=None):
     """
@@ -209,12 +289,46 @@ def plot_learned_filter(filter_module, angle_idx=None, angle=None, title=None, s
     filter_np = filter_shifted.cpu().numpy()
 
     plt.figure(figsize=(6, 4))
-    plt.fill_between(freqs_np, 0, filter_np, color="steelblue")
+    plt.fill_between(freqs_np, 0, filter_np, color=CUD_COLORS[5])
     plt.xlabel("frequency")
     plt.ylabel("amplitude")
     plt.title(title if title else default_title)
     plt.ylim(0, 1.0)
     plt.grid(True)
+    plt.xticks([]) 
+    plt.gca().axes.get_xaxis().set_visible(False)
     plt.tight_layout()
     plt.savefig(f"{save_path}_{file_suffix}.png")
     plt.close()
+
+
+def plot_results_distributions(path, df_psnr, df_ssim, df_mse):
+    """
+    Plots and saves violin plots comparing reconstruction metrics across methods.
+
+    Args:
+        path (str): File path prefix for saving plots.
+        df_psnr (pd.DataFrame): DataFrame with columns ["Algorithm", "PSNR"].
+        df_ssim (pd.DataFrame): DataFrame with columns ["Algorithm", "SSIM"].
+        df_mse (pd.DataFrame): DataFrame with columns ["Algorithm", "MSE"].
+
+    Saves:
+        Three PNG files: _psnr_distribution.png, _ssim_distribution.png, _mse_distribution.png
+    """
+
+    metric_dfs = {
+        "PSNR": df_psnr.rename(columns={"Algorithm": "Method", "PSNR": "Value"}),
+        "SSIM": df_ssim.rename(columns={"Algorithm": "Method", "SSIM": "Value"}),
+        "MSE": df_mse.rename(columns={"Algorithm": "Method", "MSE": "Value"}),
+    }
+
+    for metric, df in metric_dfs.items():
+        plt.figure(figsize=(10, 6))
+        sns.violinplot(x="Method", y="Value", data=df, inner="box", palette="Set2")
+        plt.title(f"{metric} Distribution by Method")
+        plt.ylabel(metric)
+        plt.xlabel("Method")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig(f"{path}_{metric.lower()}_distribution.png")
+        plt.close()

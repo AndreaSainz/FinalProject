@@ -18,13 +18,15 @@ import json
 from ..models.deep_back_projection import DBP
 from ..models.deep_filtered_back_projection import DeepFBP
 from ..models.fusion_filtered_back_projection import FusionFBP
+from ..models.deep_fusion_back_projection import DeepFusionBP
 
 from accelerate import Accelerator
 
 MODEL_REGISTRY = {
     "DBP": DBP,
     "DeepFBP": DeepFBP,
-    "FusionFBP": FusionFBP
+    "FusionFBP": FusionFBP,
+    "DeepFusionBP":DeepFusionBP
 }
 
 

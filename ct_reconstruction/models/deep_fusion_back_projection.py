@@ -11,15 +11,15 @@ from .model import ModelBase
 
 class LearnableFilter(Module):
     """
-    Learnable frequency-domain filter module for CT sinograms in FusionFBP.
+    Implements a learnable frequency-domain filter for sinograms in CT reconstruction.
 
-    This module replaces traditional filters like Ram-Lak with trainable parameters
-    in the frequency domain. It supports shared or per-angle filters.
+    This module replaces traditional analytic filters (e.g., Ram-Lak) with learnable weights
+    in the frequency domain, optionally per projection angle.
 
     Args:
-        init_filter (torch.Tensor): Initial 1D filter in the frequency domain.
+        init_filter (torch.Tensor): Initial filter in frequency domain.
         per_angle (bool): If True, uses one filter per angle.
-        num_angles (int, optional): Required if per_angle=True.
+        num_angles (int, optional): Required when per_angle=True.
     """
 
     def __init__(self, init_filter, per_angle=False, num_angles=None):
@@ -44,7 +44,13 @@ class LearnableFilter(Module):
 
 class IntermediateResidualBlock(Module):
     """
-    Depthwise 1D residual block used in angular interpolation.
+    Depthwise 1D convolutional residual block.
+
+    Used in the angular interpolation subnetwork. Applies a depthwise Conv1d,
+    followed by BatchNorm1d and PReLU, with a residual connection.
+
+    Args:
+        channels (int): Number of input/output channels.
     """
     def __init__(self, channels):
         super().__init__()
@@ -59,70 +65,80 @@ class IntermediateResidualBlock(Module):
 
 
 class single_back_projections(Module):
+    """
+    Applies single-angle differentiable backprojections using Tomosipo.
 
-        def __init__(self, angles_sparse, src_orig_dist, num_detectors, vg):
+    Each angle in the sparse set is used to compute a separate backprojection,
+    forming a stack of angle-specific reconstructions.
 
-            super().__init__()
-            self.angles_sparse = angles_sparse
-            self.src_orig_dist = src_orig_dist
-            self.num_detectors = num_detectors
-            self.vg = vg
+    Args:
+        angles_sparse (torch.Tensor): Sparse angles to backproject.
+        src_orig_dist (float): Source-to-origin distance.
+        num_detectors (int): Number of detector bins.
+        vg (ts.VolumeGeometry): Volume geometry for tomosipo operator.
+    """
+    def __init__(self, angles_sparse, src_orig_dist, num_detectors, vg):
 
-            self.tomosipo_geometries = []
-            for angle in self.angles_sparse:
-                # Define Fan Beam Geometry for each angle
-                proj_geom_single = ts.cone(angles= angle, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
+        super().__init__()
+        self.angles_sparse = angles_sparse
+        self.src_orig_dist = src_orig_dist
+        self.num_detectors = num_detectors
+        self.vg = vg
 
-                # Compute Back Projection
-                A_single = ts.operator(self.vg, proj_geom_single)
+        self.tomosipo_geometries = []
+        for angle in self.angles_sparse:
+            # Define Fan Beam Geometry for each angle
+            proj_geom_single = ts.cone(angles= angle, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
 
-                # make operator diferenciable
-                self.AT = to_autograd(A_single.T, is_2d=True, num_extra_dims=2)
+            # Compute Back Projection
+            A_single = ts.operator(self.vg, proj_geom_single)
 
-                self.tomosipo_geometries.append(self.AT)
+            # make operator diferenciable
+            self.AT = to_autograd(A_single.T, is_2d=True, num_extra_dims=2)
 
-            self.tomosipo_geometries = torch(self.tomosipo_geometries)
+            self.tomosipo_geometries.append(self.AT)
 
 
-        def foward(self, sinogram):
-            """
-            Generates a set of backprojections from  sparse-view sinogram.
+    def forward(self, sinogram):
+        """
+        Generates a set of backprojections from  sparse-view sinogram.
 
-            Each angle is used to generate a single-angle backprojection using tomosipo.
+        Each angle is used to generate a single-angle backprojection using tomosipo.
 
-            Args:
-                sinogram (torch.Tensor): Noisy sinogram of shape (1, num_angles, num_detectors).
+        Args:
+            sinogram (torch.Tensor): Noisy sinogram of shape (1, num_angles, num_detectors).
 
-            Returns:
-                torch.Tensor: Stack of backprojections of shape (n_single_BP, H, W).
-            """
+        Returns:
+            torch.Tensor: Stack of backprojections of shape (n_single_BP, H, W).
+        """
 
-            projections = []
+        projections = []
+        
+        for i, operator in enumerate(self.tomosipo_geometries):
             
-            for i, operator in enumerate(self.tomosipo_geometries):
-                
-                # Extract only the sinogram at this specific angle
-                sinogram_angle = sinogram[:, i:i+1, :]
+            # Extract only the sinogram at this specific angle
+            sinogram_angle = sinogram[:, i:i+1, :]
 
-                # Back projection at single angle
-                projection = operator(sinogram_angle)
+            # Back projection at single angle
+            projection = operator(sinogram_angle)
 
-                projections.append(projection)
+            projections.append(projection)
 
-            # Stack all projections into a single tensor of shape [view_angles, 362, 362]
-            single_back_projection = torch.stack(projections).squeeze(1) 
+        # Stack all projections into a single tensor of shape [view_angles, 362, 362]
+        single_back_projection = torch.stack(projections).squeeze(1) 
 
-            return single_back_projection
+        return single_back_projection
 
 
 class DBP_block(Module):
     """
-    Deep CNN block for image denoising used in FusionFBP.
+    Deep CNN for denoising stacked single-angle backprojections.
 
-    Consists of an initial conv block, 15 intermediate conv+BN+ReLU blocks,
-    and a final conv layer to restore the image. 
+    Composed of an initial Conv2d+ReLU, 15 intermediate Conv2d+BN+ReLU layers,
+    and a final Conv2d output layer. Adapted from the DBP architecture.
 
-    This is slightly change arquitecture base on DBP model but adapted to only one initial image.
+    Args:
+        channels (int): Number of input channels (i.e., number of angles).
     """
     def __init__(self, channels):
 
@@ -251,22 +267,47 @@ class DBP_block(Module):
 
 
 
-class DeepFBPNetwork(Module):
+class DeepFusionBPNetwork(Module):
     """
-    Deep Filtered Backprojection Network for CT reconstruction.
+    High-level model manager for Deep Fusion Backprojection (DeepFusionBP).
 
-    Pipeline:
-        - Learnable frequency filter (Ram-Lak based init)
-        - Angular interpolation via depthwise convolutions
-        - Differentiable backprojection (Tomosipo)
-        - Residual CNN-based denoiser
+    Handles geometry setup, model instantiation, training configuration, and logging.
 
     Args:
-        num_detectors (int): Number of detector bins.
-        num_angles (int): Number of projection angles.
-        A (ts.Operator): Tomosipo projection operator.
-        filter_type (str): Either 'Filter I' (shared) or per-angle.
-        device (torch.device): Computation device.
+        model_path (str): Path to save model artifacts.
+        filter_type (str): Type of frequency-domain filter ('Filter I' or per-angle).
+        view_angles (int): Number of angles in sparse-view mode.
+        alpha (float): Log transform scaling for preprocessing.
+        i_0 (float): Incident photon count (used in noise simulation).
+        sigma (float): Std. dev. for additive Gaussian noise.
+        batch_size (int): Training batch size.
+        epochs (int): Total training epochs.
+        learning_rate (float): Optimizer learning rate.
+        debug (bool): Enables verbose/debug plotting if True.
+        seed (int): Random seed.
+        accelerator (torch.device): Computation device.
+        scheduler (str): LR scheduler identifier.
+        log_file (str): Path to training log file.
+
+    Example:
+        >>> model = DeepFusionBP(
+        >>>     model_path="checkpoints/deepfbp",
+        >>>     filter_type="Filter I",
+        >>>     view_angles=60,
+        >>>     alpha=0.001,
+        >>>     i_0=1e5,
+        >>>     sigma=0.01,
+        >>>     batch_size=4,
+        >>>     epochs=100,
+        >>>     learning_rate=1e-4,
+        >>>     debug=True,
+        >>>     seed=42,
+        >>>     accelerator=torch.device("cuda"),
+        >>>     scheduler="cosine",
+        >>>     log_file="training.log"
+        >>> )
+        >>> model.train(train_loader, val_loader)
+        >>> model.save_config()
     """
     def __init__(self, angles_sparse, src_orig_dist, num_detectors, num_angles, vg, A, filter_type, device):
         super().__init__()
@@ -308,7 +349,7 @@ class DeepFBPNetwork(Module):
         """
         Computes the next power-of-two padding size to avoid aliasing.
         """
-        return max(64, 2 ** (self.num_detectors * 2).bit_length())
+        return 2 ** int(torch.ceil(torch.log2(torch.tensor(self.num_detectors, dtype=torch.float32))).item())
 
     def ram_lak_filter(self, size):
         """
@@ -429,7 +470,7 @@ class DeepFBPNetwork(Module):
 
 
         # Differentiable backprojection
-        projections = self.single_back_projections(x)
+        projections = self.back_projections(x)
 
 
 
@@ -488,9 +529,9 @@ class DeepFBPNetwork(Module):
 
 
 
-class DeepFBP(ModelBase):
+class DeepFusionBP(ModelBase):
     """
-    High-level wrapper for training and managing the Deep Filtered Backprojection (DeepFBP) model.
+    High-level wrapper for training and managing the DeepFusionBP model.
 
     This class extends `ModelBase` and encapsulates the DeepFBP-specific functionality, including
     configurable projection geometry (sparse or full view), structured training phases,
@@ -524,9 +565,10 @@ class DeepFBP(ModelBase):
     """
 
     def __init__(self, model_path, filter_type, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed,accelerator, scheduler, log_file):
-        super().__init__(model_path, "DeepFBP", False, 1, True, view_angles, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, accelerator, scheduler, log_file)
+        super().__init__(model_path, "DeepFusionBP", False, 1, True, view_angles, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, accelerator, scheduler, log_file)
         self.filter_type = filter_type
 
+        self._log(f"[Geometry] Using sparse-view geometry with {view_angles} angles.")
         self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
         self.angles_sparse = self.angles[self.indices]
         self.pg = ts.cone(angles=self.angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
@@ -534,41 +576,7 @@ class DeepFBP(ModelBase):
         self.num_angles = self.view_angles
 
 
-        self.model = DeepFBPNetwork(self.num_detectors, self.angles_sparse, self.A, self.filter_type, self.device)
-
-
-    def _build_projection_operator(self):
-        """
-        Constructs the appropriate tomosipo projection operator based on view configuration.
-
-        If sparse-view reconstruction is enabled, this method subsamples the available
-        projection angles using evenly spaced indices and builds a sparse-view operator.
-        Otherwise, it uses the full set of angles and the default projection operator.
-
-        Returns:
-            A (ts.Operator): Tomosipo forward projection operator.
-            pg (ts.ProjectionGeometry): Associated projection geometry.
-            num_angles (int): Number of projection angles used.
-
-        Notes:
-            - The sparse-view operator is useful for simulating reduced acquisition scenarios.
-            - The selected angles are stored via `self.indices` and reused elsewhere.
-            - This method also logs which configuration is applied.
-
-        Example:
-            >>> A, pg, n_angles = self._build_projection_operator()
-        """
-        
-        
-        self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
-        angles_sparse = self.angles[self.indices]
-        pg = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
-        A = ts.operator(self.vg, pg)
-        num_angles = self.view_angles
-
-        self._log(f"[Geometry] Using sparse-view geometry with {num_angles} angles.")
-    
-        return A, pg, num_angles
+        self.model = DeepFusionBPNetwork(self.angles_sparse, self.src_orig_dist, self.num_detectors, self.view_angles, self.vg, self.A, self.filter_type, self.device)
 
 
     def save_config(self):
@@ -601,6 +609,4 @@ class DeepFBP(ModelBase):
         with open(f"{self.model_path}_config.json", "w") as f:
             json.dump(config, f, indent=4)
 
-        self._log(f"[DeepFBP] Configuration saved to: {self.model_path}_config.json")
-
-
+        self._log(f"[DeepFusionBP] Configuration saved to: {self.model_path}_config.json")

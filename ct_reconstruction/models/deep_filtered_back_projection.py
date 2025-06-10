@@ -135,7 +135,7 @@ class DeepFBPNetwork(Module):
         """
         Computes the next power-of-two padding size to avoid aliasing.
         """
-        return max(64, 2 ** (self.num_detectors * 2).bit_length())
+        return 2 ** int(torch.ceil(torch.log2(torch.tensor(self.num_detectors, dtype=torch.float32))).item())
 
     def ram_lak_filter(self, size):
         """

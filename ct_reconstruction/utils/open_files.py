@@ -17,11 +17,14 @@ import os
 import json
 from ..models.deep_back_projection import DBP
 from ..models.deep_filtered_back_projection import DeepFBP
+from ..models.fusion_filtered_back_projection import FusionFBP
+
 from accelerate import Accelerator
 
 MODEL_REGISTRY = {
     "DBP": DBP,
     "DeepFBP": DeepFBP,
+    "FusionFBP": FusionFBP
 }
 
 

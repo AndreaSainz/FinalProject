@@ -37,7 +37,7 @@ CUD_COLORS = [
 ]
 
 # Apply consistent style and font sizes for accessibility
-plt.style.use('seaborn-whitegrid')
+sns.set_theme(style="whitegrid")
 plt.rcParams.update({
     "font.size": 12,
     "axes.labelsize": 12,

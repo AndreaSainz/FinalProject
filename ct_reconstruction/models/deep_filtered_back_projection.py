@@ -142,6 +142,8 @@ class DeepFBPNetwork(Module):
         Generates Ram-Lak filter directly in frequency domain.
         """
         freqs = torch.fft.fftfreq(size)
+        ramp = torch.abs(freqs)
+        ramp = ramp / ramp.max()
         return torch.abs(freqs)
             
     def forward(self, x):

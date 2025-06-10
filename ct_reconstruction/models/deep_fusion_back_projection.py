@@ -356,6 +356,8 @@ class DeepFusionBPNetwork(Module):
         Generates Ram-Lak filter directly in frequency domain.
         """
         freqs = torch.fft.fftfreq(size)
+        ramp = torch.abs(freqs)
+        ramp = ramp / ramp.max()
         return torch.abs(freqs)
             
     def forward(self, x):
@@ -369,34 +371,11 @@ class DeepFusionBPNetwork(Module):
         plt.savefig("sinograma_inicial.png")
         plt.close()
 
-        images1 = self.AT(x)  
-
-        img_np = images1[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
-
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Tomosipo inicial vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
-
-        # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Tomosipo inicial auto escala (max={max_val:.4f})")
-        #axs[1].axis("off")
-
-        plt.tight_layout()
-        plt.savefig("imagen_tomosipo_inicial.png")
-        plt.close()
-
-
 
 
         # Initial shape: [B, 1, A, D]
         x = x.squeeze(1)  # [B, A, D]
         x = pad(x, (0, self.padding), mode="constant", value=0)
-
 
 
         max_val = x[0].max()
@@ -407,33 +386,9 @@ class DeepFusionBPNetwork(Module):
         plt.close()
 
 
-
-
         x = self.learnable_filter(x)
         x = x[..., :self.num_detectors]  # Remove padding
 
-
-        x_img = x.unsqueeze(1)
-        images1 = self.AT(x_img)  
-
-        img_np = images1[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
-
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Tomosipo filtrado vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
-
-        # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Tomosipo filtrado auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
-
-        plt.tight_layout()
-        plt.savefig("imagen_tomosipo_filtrado.png")
-        plt.close()
 
         max_val = x[0].max()
         min_val =  x[0].min()
@@ -470,6 +425,7 @@ class DeepFusionBPNetwork(Module):
 
 
         # Differentiable backprojection
+        x = x.squeeze(1) #needs shape [B,A,D]
         projections = self.back_projections(x)
 
 
@@ -520,7 +476,6 @@ class DeepFusionBPNetwork(Module):
         plt.tight_layout()
         plt.savefig("imagen_reconstruccion.png")
         plt.close()
-
 
 
         return img

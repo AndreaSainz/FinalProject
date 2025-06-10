@@ -1206,19 +1206,33 @@ class ModelBase(Module):
                 if samples and i in samples:
                     plot_different_reconstructions(self.model_type, i, recon_dict, pred_img, gt_img, save_path)
 
+        #convert to dataframe
         df_psnr = pd.DataFrame(psnr_data)
         df_ssim = pd.DataFrame(ssim_data)
         df_mse = pd.DataFrame(mse_data)
-        df_psnr.to_csv(f"{save_path}_psnr_full.csv", index=False)
-        df_ssim.to_csv(f"{save_path}_ssim_full.csv", index=False)
-        df_mse.to_csv(f"{save_path}_mse_full.csv", index=False)
+
+        #group by algorithm and convert to lists
+        df_psnr_grouped = df_psnr.groupby("Algorithm")["PSNR"].apply(list).reset_index()
+        df_ssim_grouped = df_ssim.groupby("Algorithm")["SSIM"].apply(list).reset_index()
+        df_mse_grouped = df_mse.groupby("Algorithm")["MSE"].apply(list).reset_index()
+
+        #save dataframes
+        df_psnr_grouped.to_csv(f"{save_path}_psnr_full.csv", index=False)
+        df_ssim_grouped.to_csv(f"{save_path}_ssim_full.csv", index=False)
+        df_mse_grouped.to_csv(f"{save_path}_mse_full.csv", index=False)
 
         # do distributions plotting
         plot_results_distributions(save_path, df_psnr, df_ssim, df_mse)
 
         # Save table with mean and standard deviation for all metrics and algortihms 
-        df_mean = df_psnr.groupby("Algorithm").mean().merge(df_ssim.groupby("Algorithm").mean(), on="Algorithm").merge(df_mse.groupby("Algorithm").mean(), on="Algorithm")
-        df_std = df_psnr.groupby("Algorithm").std().merge(df_ssim.groupby("Algorithm").std(), on="Algorithm").merge(df_mse.groupby("Algorithm").std(), on="Algorithm")
+        df_mean = df_psnr.groupby("Algorithm").mean().rename(columns={"PSNR": "PSNR_mean"})
+        df_mean["SSIM_mean"] = df_ssim.groupby("Algorithm").mean()["SSIM"]
+        df_mean["MSE_mean"] = df_mse.groupby("Algorithm").mean()["MSE"]
+
+        df_std = df_psnr.groupby("Algorithm").std().rename(columns={"PSNR": "PSNR_std"})
+        df_std["SSIM_std"] = df_ssim.groupby("Algorithm").std()["SSIM"]
+        df_std["MSE_std"] = df_mse.groupby("Algorithm").std()["MSE"]
+
         df_all = df_mean.merge(df_std, on="Algorithm")
         df_all.to_csv(f"{save_path}_reconstruction_metrics.csv", index=False)
 

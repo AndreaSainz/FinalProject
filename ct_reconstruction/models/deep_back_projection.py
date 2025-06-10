@@ -1,8 +1,4 @@
-from torch.nn import ModuleList
-from torch.nn import Conv2d
-from torch.nn import ReLU
-from torch.nn import BatchNorm2d
-from torch.nn import Sequential
+from torch.nn import ModuleList, Conv2d, ReLU, BatchNorm2d, Sequential
 import json
 from ..models.model import ModelBase
 

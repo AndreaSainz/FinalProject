@@ -302,9 +302,9 @@ class FusionFBPNetwork(Module):
 
 
 
-        max_val = x[0,0].max()
-        min_val =  x[0,0].min()
-        plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
+        max_val = x[0].max()
+        min_val =  x[0].min()
+        plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
         plt.title(f"Sinograma padding vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
         plt.savefig("sinograma_padding.png")
         plt.close()

@@ -32,6 +32,7 @@ class LearnableFilter(Module):
         else:
             self.register_parameter("weights", Parameter(init_filter))
 
+
     def forward(self, x):
         ftt1d = torch.fft.fft(x, dim=-1)
         if self.per_angle:
@@ -256,10 +257,11 @@ class FusionFBPNetwork(Module):
         """
         Generates Ram-Lak filter directly in frequency domain.
         """
-        freqs = torch.fft.fftfreq(size)
-        ramp = torch.abs(freqs)
-        ramp = ramp / ramp.max()
-        return torch.abs(freqs)
+        steps = int(size / 2 + 1)
+        ramp = torch.linspace(0, 1, steps, dtype=torch.float32)
+        down = torch.linspace(1, 0, steps, dtype=torch.float32)
+        f = torch.cat([ramp, down[:-2]])
+        return f
             
 
     def forward(self, x):
@@ -270,8 +272,6 @@ class FusionFBPNetwork(Module):
         x = self.learnable_filter(x)
         x = x[..., :self.num_detectors]  # Remove padding
 
-
-
         # Interpolation network
         x = x.reshape(-1, 1, self.num_detectors)
         x = self.interpolator_1(x)
@@ -279,8 +279,7 @@ class FusionFBPNetwork(Module):
         x = self.interpolator_3(x)
         x = self.interpolator_conv(x)
         x = x.view(-1, self.num_angles, self.num_detectors).unsqueeze(1)
-
-
+        
         # Differentiable backprojection
         img = self.AT(x)
 
@@ -332,49 +331,10 @@ class FusionFBP(ModelBase):
         self.filter_type = filter_type
         
 
-        self.A_fusionFBP, self.pg_fusionFBP, self.num_angles_fusionFBP = self._build_projection_operator()
-
+        self.A_fusionFBP = self._get_operator()
+        self.num_angles_fusionFBP = self.view_angles if self.sparse_view else self.num_angles
 
         self.model = FusionFBPNetwork(self.num_detectors, self.num_angles_fusionFBP, self.A_fusionFBP, self.filter_type, self.device)
-
-
-    def _build_projection_operator(self):
-        """
-        Constructs the appropriate tomosipo projection operator based on view configuration.
-
-        If sparse-view reconstruction is enabled, this method subsamples the available
-        projection angles using evenly spaced indices and builds a sparse-view operator.
-        Otherwise, it uses the full set of angles and the default projection operator.
-
-        Returns:
-            A (ts.Operator): Tomosipo forward projection operator.
-            pg (ts.ProjectionGeometry): Associated projection geometry.
-            num_angles (int): Number of projection angles used.
-
-        Notes:
-            - The sparse-view operator is useful for simulating reduced acquisition scenarios.
-            - The selected angles are stored via `self.indices` and reused elsewhere.
-            - This method also logs which configuration is applied.
-
-        Example:
-            >>> A, pg, n_angles = self._build_projection_operator()
-        """
-        
-        if self.sparse_view:
-            self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
-            angles_sparse = self.angles[self.indices]
-            pg = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
-            A = ts.operator(self.vg, pg)
-            num_angles = self.view_angles
-            self._log(f"[Geometry] Using sparse-view geometry with {num_angles} angles.")
-        else:
-            pg = self.pg
-            A = self.A
-            num_angles = self.num_angles
-            self._log(f"[Geometry] Using full-view geometry with {num_angles} angles.")
-        
-        return A, pg, num_angles
-
 
 
 

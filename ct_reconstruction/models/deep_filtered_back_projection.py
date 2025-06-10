@@ -141,96 +141,18 @@ class DeepFBPNetwork(Module):
         """
         Generates Ram-Lak filter directly in frequency domain.
         """
-        freqs = torch.fft.fftfreq(size)
-        ramp = torch.abs(freqs)
-        ramp = ramp / ramp.max()
-        return torch.abs(freqs)
-            
+        steps = int(size / 2 + 1)
+        ramp = torch.linspace(0, 1, steps, dtype=torch.float32)
+        down = torch.linspace(1, 0, steps, dtype=torch.float32)
+        f = torch.cat([ramp, down[:-2]])
+        return f
+    
     def forward(self, x):
-
-
-        print(f" shape inicial {x.shape}")
-        max_val = x[0,0].max()
-        min_val =  x[0,0].min()
-        plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma inicial vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        plt.savefig("sinograma_inicial.png")
-        plt.close()
-
-        images1 = self.AT(x)  
-
-        img_np = images1[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
-
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Tomosipo inicial vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
-
-        # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Tomosipo inicial auto escala (max={max_val:.4f})")
-        #axs[1].axis("off")
-
-        plt.tight_layout()
-        plt.savefig("imagen_tomosipo_inicial.png")
-        plt.close()
-
-
-
-
         # Initial shape: [B, 1, A, D]
         x = x.squeeze(1)  # [B, A, D]
         x = pad(x, (0, self.padding), mode="constant", value=0)
-
-
-
-        max_val = x[0].max()
-        min_val =  x[0].min()
-        plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma padding vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        plt.savefig("sinograma_padding.png")
-        plt.close()
-
-
-
-
         x = self.learnable_filter(x)
         x = x[..., :self.num_detectors]  # Remove padding
-
-
-        x_img = x.unsqueeze(1)
-        images1 = self.AT(x_img)  
-
-        img_np = images1[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
-
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Tomosipo filtrado vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
-
-        # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Tomosipo filtrado auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
-
-        plt.tight_layout()
-        plt.savefig("imagen_tomosipo_filtrado.png")
-        plt.close()
-
-        max_val = x[0].max()
-        min_val =  x[0].min()
-        plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma filtrado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        plt.savefig("sinograma_filtrado.png")
-        plt.close()
-
-
 
 
         # Interpolation network
@@ -241,82 +163,11 @@ class DeepFBPNetwork(Module):
         x = self.interpolator_conv(x)
         x = x.view(-1, self.num_angles, self.num_detectors).unsqueeze(1)
 
-
-
-
-
-
-        max_val = x[0,0].max()
-        min_val =  x[0,0].min()
-        plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma interpolado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f}")
-        plt.savefig("sinograma_interpolado.png")
-        plt.close()
-    
-
-
-
-
         # Differentiable backprojection
         img = self.AT(x)
 
-
-
-
-
-        img_np = img[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
-
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Tomosipo vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
-
-        # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Tomosipo auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
-
-        plt.tight_layout()
-        plt.savefig("imagen_tomosipo.png")
-        plt.close()
-
-
-
-
-
         #normlise images
         img = img / self.tomosipo_normalizer
-
-
-
-
-
-        img_np = img[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
-
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Tomosipo normalised vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
-
-        # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Tomosipo auto escala normalised (max={max_val:.4f})")
-        axs[1].axis("off")
-
-        plt.tight_layout()
-        plt.savefig("imagen_tomosipo_normalised.png")
-        plt.close()
-
-
-
-
-
 
 
         # Denoising network
@@ -326,34 +177,6 @@ class DeepFBPNetwork(Module):
         x = self.denoising_res_2(x)
         x = self.denoising_res_3(x)
         x = self.denoising_output(x)
-
-
-
-
-
-
-        img_np = x[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
-
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Denoiser vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
-
-        # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Denoiser auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
-
-        plt.tight_layout()
-        plt.savefig("imagen_denoiser.png")
-        plt.close()
-
-
-
-
 
         return x
     
@@ -401,49 +224,11 @@ class DeepFBP(ModelBase):
         self.filter_type = filter_type
         
         self.current_phase = None
-
-        self.A_deepfbp, self.pg_deepfbp, self.num_angles_deepfbp = self._build_projection_operator()
-
+        self.A_deepfbp = self._get_operator()
+        self.num_angles_deepfbp = self.view_angles if self.sparse_view else self.num_angles
 
         self.model = DeepFBPNetwork(self.num_detectors, self.num_angles_deepfbp, self.A_deepfbp, self.filter_type, self.device)
 
-
-    def _build_projection_operator(self):
-        """
-        Constructs the appropriate tomosipo projection operator based on view configuration.
-
-        If sparse-view reconstruction is enabled, this method subsamples the available
-        projection angles using evenly spaced indices and builds a sparse-view operator.
-        Otherwise, it uses the full set of angles and the default projection operator.
-
-        Returns:
-            A (ts.Operator): Tomosipo forward projection operator.
-            pg (ts.ProjectionGeometry): Associated projection geometry.
-            num_angles (int): Number of projection angles used.
-
-        Notes:
-            - The sparse-view operator is useful for simulating reduced acquisition scenarios.
-            - The selected angles are stored via `self.indices` and reused elsewhere.
-            - This method also logs which configuration is applied.
-
-        Example:
-            >>> A, pg, n_angles = self._build_projection_operator()
-        """
-        
-        if self.sparse_view:
-            self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
-            angles_sparse = self.angles[self.indices]
-            pg = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
-            A = ts.operator(self.vg, pg)
-            num_angles = self.view_angles
-            self._log(f"[Geometry] Using sparse-view geometry with {num_angles} angles.")
-        else:
-            pg = self.pg
-            A = self.A
-            num_angles = self.num_angles
-            self._log(f"[Geometry] Using full-view geometry with {num_angles} angles.")
-        
-        return A, pg, num_angles
 
 
     def set_training_phase(self, phase):

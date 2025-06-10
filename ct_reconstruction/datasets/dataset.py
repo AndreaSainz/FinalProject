@@ -75,7 +75,7 @@ class LoDoPaBDataset(Dataset):
     """
 
 
-    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
+    def __init__(self, ground_truth_dir, vg, angles, pg, A, single_bp = False, n_single_BP= 16, sparse_view = False, view_angles=90, indices = None, alpha=5, i_0 = 1000, sigma = 1, seed = 29072000, max_len = None,  debug = False, logger=None, device="cuda"):
 
         if single_bp and sparse_view:
             raise ValueError("Sparse-view sinogram and single view backprojections are not compatible now, choose one of them")
@@ -88,6 +88,7 @@ class LoDoPaBDataset(Dataset):
         self.src_det_dist = 1050
         self.slices_per_file = 128
         self.n_single_BP = int(n_single_BP)
+        self.view_angles = int(view_angles)
         self.single_bp = single_bp
         self.sparse_view = sparse_view
         self.alpha = alpha
@@ -98,7 +99,7 @@ class LoDoPaBDataset(Dataset):
                 if self.single_bp:
                     indices = torch.linspace(0, self.num_angles - 1, steps=self.n_single_BP).long()
                 elif self.sparse_view:
-                    indices = torch.linspace(0, self.num_angles - 1, steps=90).long()  # Default for sparse view
+                    indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()  
             if not isinstance(indices, torch.Tensor):
                 indices = torch.tensor(indices, dtype=torch.long)
         self.indices = indices

@@ -132,30 +132,6 @@ class ModelBase(Module):
         self.scheduler = scheduler
         self.indices = None
 
-        # Create tomosipo volume and projection geometry
-        self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
-        self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
-        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist,  shape=(1, self.num_detectors) )     # Fan beam structure
-        self.A = ts.operator(self.vg,self.pg)     
-   
-
-        if self.sparse_view:
-            self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
-            # so the angles match the subset that was taken from the original angles
-            angles_sparse = self.angles[self.indices_base] 
-            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors) )
-            self.A_sparse = ts.operator(self.vg, self.pg_sparse)
-
-        elif self.single_bp:
-            self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.n_single_BP).long()
-            # so the angles match the subset that was taken from the original angles
-            angles_sparse = self.angles[self.indices_base] 
-            self.pg_sparse = ts.cone(angles=angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
-            self.A_sparse = ts.operator(self.vg, self.pg_sparse)
-        else:
-            self.indices_base = torch.arange(self.num_angles)
-        
-
         # accelerator for faster code
         self.accelerator = accelerator
         self.trainable_params = None
@@ -166,6 +142,34 @@ class ModelBase(Module):
         
         # set the device once for the whole class
         self.device = self.accelerator.device
+
+
+        # Create tomosipo volume and projection geometry
+        self.vg = ts.volume(shape=(1,self.pixels,self.pixels))                                                       # Volumen
+        self.angles = np.linspace(0, np.pi, self.num_angles, endpoint=True)                                          # Angles
+        self.pg = ts.cone(angles = self.angles, src_orig_dist=self.src_orig_dist,  shape=(1, self.num_detectors) )     # Fan beam structure
+        self.A = ts.operator(self.vg,self.pg)     
+   
+
+        if self.sparse_view:
+            self._log(f"[Geometry] Using sparse-view geometry with {self.view_angles} angles.")
+            self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
+            # so the angles match the subset that was taken from the original angles
+            self.angles_sparse = self.angles[self.indices_base] 
+            self.pg_sparse = ts.cone(angles=self.angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors) )
+            self.A_sparse = ts.operator(self.vg, self.pg_sparse)
+
+        elif self.single_bp:
+            self._log(f"[Geometry] Using sparse-view geometry with {self.n_single_BP} angles.")
+            self.indices_base = torch.linspace(0, self.num_angles - 1, steps=self.n_single_BP).long()
+            # so the angles match the subset that was taken from the original angles
+            self.angles_sparse = self.angles[self.indices_base] 
+            self.pg_sparse = ts.cone(angles=self.angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
+            self.A_sparse = ts.operator(self.vg, self.pg_sparse)
+        else:
+            self._log(f"[Geometry] Using full-view geometry with {self.num_angles} angles.")
+            self.indices_base = torch.arange(self.num_angles)
+        
 
 
     @property
@@ -241,6 +245,7 @@ class ModelBase(Module):
             self.single_bp,
             self.n_single_BP,
             self.sparse_view, 
+            self.view_angles,
             self.current_indices,
             self.alpha,
             self.i_0,
@@ -259,6 +264,7 @@ class ModelBase(Module):
             self.single_bp,
             self.n_single_BP, 
             self.sparse_view, 
+            self.view_angles,
             self.current_indices,
             self.alpha,  
             self.i_0, 
@@ -557,7 +563,7 @@ class ModelBase(Module):
             sample = next(iter(train_dataloader))["sparse_sinogram"]
         else:
             sample = next(iter(train_dataloader))["noisy_sinogram"]
-        #summary(self.model, input_size=tuple(sample.shape[1:])) #just for debugging
+        summary(self.model, input_size=tuple(sample.shape[1:])) #just for debugging
 
         # confirmation for the model to be train 
         if confirm_train:
@@ -702,6 +708,7 @@ class ModelBase(Module):
         self.single_bp,
         self.n_single_BP, 
         self.sparse_view, 
+        self.view_angles,
         self.current_indices,
         self.alpha,  
         self.i_0, 

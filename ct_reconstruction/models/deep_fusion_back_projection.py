@@ -1,5 +1,5 @@
 import torch
-from torch.nn import Module, ModuleList, Sequential, Conv1d, Conv2d, BatchNorm1d, PReLU, ReLU, Parameter, Hardtanh, BatchNorm2d
+from torch.nn import Module, ModuleList, Sequential, Conv1d, Conv2d, BatchNorm1d, PReLU, ReLU, Parameter, BatchNorm2d
 from torch.nn.functional import pad
 import matplotlib.pyplot as plt
 import tomosipo as ts
@@ -117,7 +117,7 @@ class single_back_projections(Module):
         for i, operator in enumerate(self.tomosipo_geometries):
             
             # Extract only the sinogram at this specific angle
-            sinogram_angle = sinogram[:, i:i+1, :]
+            sinogram_angle = sinogram[:,:, i:i+1, :]
 
             # Back projection at single angle
             projection = operator(sinogram_angle)
@@ -125,7 +125,7 @@ class single_back_projections(Module):
             projections.append(projection)
 
         # Stack all projections into a single tensor of shape [view_angles, 362, 362]
-        single_back_projection = torch.stack(projections).squeeze(1) 
+        single_back_projection = torch.stack(projections, dim=1).squeeze(2)
 
         return single_back_projection
 
@@ -317,6 +317,7 @@ class DeepFusionBPNetwork(Module):
         self.device = device
         self.A = A
         self.angles_sparse = angles_sparse
+        self.view_angles = len(self.angles_sparse)
         self.src_orig_dist = src_orig_dist
 
         # Padding parameters
@@ -351,53 +352,25 @@ class DeepFusionBPNetwork(Module):
         """
         return 2 ** int(torch.ceil(torch.log2(torch.tensor(self.num_detectors, dtype=torch.float32))).item())
 
+
     def ram_lak_filter(self, size):
         """
         Generates Ram-Lak filter directly in frequency domain.
         """
-        freqs = torch.fft.fftfreq(size)
-        ramp = torch.abs(freqs)
-        ramp = ramp / ramp.max()
-        return torch.abs(freqs)
-            
+        steps = int(size / 2 + 1)
+        ramp = torch.linspace(0, 1, steps, dtype=torch.float32)
+        down = torch.linspace(1, 0, steps, dtype=torch.float32)
+        f = torch.cat([ramp, down[:-2]])
+        return f
+    
+    
     def forward(self, x):
-
-
-        print(f" shape inicial {x.shape}")
-        max_val = x[0,0].max()
-        min_val =  x[0,0].min()
-        plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma inicial vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        plt.savefig("sinograma_inicial.png")
-        plt.close()
-
-
 
         # Initial shape: [B, 1, A, D]
         x = x.squeeze(1)  # [B, A, D]
         x = pad(x, (0, self.padding), mode="constant", value=0)
-
-
-        max_val = x[0].max()
-        min_val =  x[0].min()
-        plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma padding vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        plt.savefig("sinograma_padding.png")
-        plt.close()
-
-
         x = self.learnable_filter(x)
         x = x[..., :self.num_detectors]  # Remove padding
-
-
-        max_val = x[0].max()
-        min_val =  x[0].min()
-        plt.imshow(x[0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma filtrado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f})")
-        plt.savefig("sinograma_filtrado.png")
-        plt.close()
-
-
 
 
         # Interpolation network
@@ -406,77 +379,14 @@ class DeepFusionBPNetwork(Module):
         x = self.interpolator_2(x)
         x = self.interpolator_3(x)
         x = self.interpolator_conv(x)
-        x = x.view(-1, self.num_angles, self.num_detectors).unsqueeze(1)
-
-
-
-
-
-
-        max_val = x[0,0].max()
-        min_val =  x[0,0].min()
-        plt.imshow(x[0,0].detach().cpu().numpy(), cmap='gray')
-        plt.title(f"Sinograma interpolado vmin/vmax (min = {min_val:.4f}, max={max_val:.4f}")
-        plt.savefig("sinograma_interpolado.png")
-        plt.close()
-    
-
-
+        x = x.view(-1, self.view_angles, self.num_detectors).unsqueeze(1)
 
 
         # Differentiable backprojection
-        x = x.squeeze(1) #needs shape [B,A,D]
         projections = self.back_projections(x)
-
-
-
-
-
-        img_np = projections[0,0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
-
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Una projeccion Tomosipo vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
-
-        # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Una projeccion Tomosipo auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
-
-        plt.tight_layout()
-        plt.savefig("imagen_projecion.png")
-        plt.close()
-
-
 
         #reconstruction with DBP model
         img = self.dbp_layer(projections)
-
-
-
-        img_np = img[0].squeeze().detach().cpu().numpy()
-        max_val = img_np.max()
-
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-
-        # Imagen con vmin/vmax
-        axs[0].imshow(img_np, cmap='gray', vmin=0, vmax=1)
-        axs[0].set_title(f"Reconstruccion vmin/vmax (max={max_val:.4f})")
-        axs[0].axis("off")
-
-        # Imagen sin vmin/vmax
-        axs[1].imshow(img_np, cmap='gray')
-        axs[1].set_title(f"Reconstruccion auto escala (max={max_val:.4f})")
-        axs[1].axis("off")
-
-        plt.tight_layout()
-        plt.savefig("imagen_reconstruccion.png")
-        plt.close()
-
 
         return img
     
@@ -522,15 +432,6 @@ class DeepFusionBP(ModelBase):
     def __init__(self, model_path, filter_type, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed,accelerator, scheduler, log_file):
         super().__init__(model_path, "DeepFusionBP", False, 1, True, view_angles, alpha, i_0, sigma, batch_size, epochs, "AdamW", "MSELoss", learning_rate, debug, seed, accelerator, scheduler, log_file)
         self.filter_type = filter_type
-
-        self._log(f"[Geometry] Using sparse-view geometry with {view_angles} angles.")
-        self.indices = torch.linspace(0, self.num_angles - 1, steps=self.view_angles).long()
-        self.angles_sparse = self.angles[self.indices]
-        self.pg = ts.cone(angles=self.angles_sparse, src_orig_dist=self.src_orig_dist, shape=(1, self.num_detectors))
-        self.A = ts.operator(self.vg, self.pg)
-        self.num_angles = self.view_angles
-
-
         self.model = DeepFusionBPNetwork(self.angles_sparse, self.src_orig_dist, self.num_detectors, self.view_angles, self.vg, self.A, self.filter_type, self.device)
 
 

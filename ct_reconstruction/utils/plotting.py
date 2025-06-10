@@ -37,7 +37,7 @@ CUD_COLORS = [
 ]
 
 # Apply consistent style and font sizes for accessibility
-sns.set_theme(style="whitegrid")
+sns.set_theme(style="white")
 plt.rcParams.update({
     "font.size": 12,
     "axes.labelsize": 12,

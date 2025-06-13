@@ -31,14 +31,16 @@ class LearnableFilter(Module):
             filters = torch.stack([init_filter.clone().detach() for _ in range(num_angles)])
             self.register_parameter("weights", Parameter(filters))
         else:
-            self.register_parameter("weights", Parameter(init_filter))
+            filters = torch.stack([init_filter.clone().detach()])  # shape: (1, D)
+            self.register_parameter("weights", Parameter(filters))
 
     def forward(self, x):
         ftt1d = torch.fft.fft(x, dim=-1)
         if self.per_angle:
             filtered = ftt1d * self.weights[None, :, :]
         else:
-            filtered = ftt1d * self.weights[None, None, :]
+            filter_shared = self.weights.expand(ftt1d.shape[1], -1)
+            filtered = ftt1d * filter_shared[None, :, :]
         return torch.fft.ifft(filtered, dim=-1).real
     
 
@@ -249,8 +251,6 @@ class DBP_block(Module):
         Returns:
             torch.Tensor: Output tensor of shape (B, 1, H, W), representing the reconstructed image.
         """
-        print(x.shape)
-        
         # initial part
         conv1 = self.conv1(x)
 
@@ -313,11 +313,10 @@ class DeepFusionBPNetwork(Module):
         super().__init__()
 
         self.num_detectors = num_detectors
-        self.num_angles = num_angles
+        self.view_angles = num_angles
         self.device = device
         self.A = A
         self.angles_sparse = angles_sparse
-        self.view_angles = len(self.angles_sparse)
         self.src_orig_dist = src_orig_dist
 
         # Padding parameters
@@ -329,7 +328,7 @@ class DeepFusionBPNetwork(Module):
         if filter_type == "Filter I":
             self.learnable_filter = LearnableFilter(ram_lak, per_angle=False)
         else:
-            self.learnable_filter = LearnableFilter(ram_lak, per_angle=True, num_angles=num_angles)
+            self.learnable_filter = LearnableFilter(ram_lak, per_angle=True, num_angles=self.view_angles)
 
         # Interpolation blocks
         self.interpolator_1 = IntermediateResidualBlock(1)

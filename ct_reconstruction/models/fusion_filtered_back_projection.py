@@ -30,7 +30,8 @@ class LearnableFilter(Module):
             filters = torch.stack([init_filter.clone().detach() for _ in range(num_angles)])
             self.register_parameter("weights", Parameter(filters))
         else:
-            self.register_parameter("weights", Parameter(init_filter))
+            filters = torch.stack([init_filter.clone().detach()])  # shape: (1, D)
+            self.register_parameter("weights", Parameter(filters))
 
 
     def forward(self, x):
@@ -38,7 +39,8 @@ class LearnableFilter(Module):
         if self.per_angle:
             filtered = ftt1d * self.weights[None, :, :]
         else:
-            filtered = ftt1d * self.weights[None, None, :]
+            filter_shared = self.weights.expand(ftt1d.shape[1], -1)
+            filtered = ftt1d * filter_shared[None, :, :]
         return torch.fft.ifft(filtered, dim=-1).real
 
 
@@ -216,7 +218,7 @@ class FusionFBPNetwork(Module):
         super().__init__()
 
         self.num_detectors = num_detectors
-        self.num_angles = num_angles
+        self.num_angles_ = num_angles
         self.device = device
         self.A = A
         self.AT = to_autograd(self.A.T, is_2d=True, num_extra_dims=2)
@@ -230,7 +232,7 @@ class FusionFBPNetwork(Module):
         if filter_type == "Filter I":
             self.learnable_filter = LearnableFilter(ram_lak, per_angle=False)
         else:
-            self.learnable_filter = LearnableFilter(ram_lak, per_angle=True, num_angles=num_angles)
+            self.learnable_filter = LearnableFilter(ram_lak, per_angle=True, num_angles=self.num_angles_)
 
         # Interpolation blocks
         self.interpolator_1 = IntermediateResidualBlock(1)
@@ -278,7 +280,7 @@ class FusionFBPNetwork(Module):
         x = self.interpolator_2(x)
         x = self.interpolator_3(x)
         x = self.interpolator_conv(x)
-        x = x.view(-1, self.num_angles, self.num_detectors).unsqueeze(1)
+        x = x.view(-1, self.num_angles_, self.num_detectors).unsqueeze(1)
         
         # Differentiable backprojection
         img = self.AT(x)

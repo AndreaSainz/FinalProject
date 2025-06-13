@@ -14,7 +14,7 @@ test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground
 
 # define parameters
 n_single_BP = 16
-sparse_view = False
+sparse_view = True
 view_angles = 90
 alpha = 1
 i_0 = 100000
@@ -30,14 +30,14 @@ learning_rate = 1e-3
 scheduler = True
 filter_type = "Filter I"
 patience = 15
-model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/deepfbp_2000_filterI"
-log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/deepfbp_2000_filterI.log"
-figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_2000_filterI"
+model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/deepfbp_2000_sparse_filterI"
+log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/deepfbp_2000_sparse_filterI.log"
+figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_2000_sparse_filterI"
 
 
 # define model arquitecture
 model_deepfbp = DeepFBP(model_path, filter_type, sparse_view, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file)
-plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_2000_filterI_initial")
+plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_2000_sparse_filterI_initial")
 # training and validation
 history = model_deepfbp.train_deepFBP(training_path, validation_path, figure_path, max_len_train, max_len_val, patience, epochs, learning_rate, phase=3)
 
@@ -52,4 +52,4 @@ model_deepfbp.evaluate_and_visualize(figure_path, samples, test_path, max_len_te
                                 num_iterations_sirt=100, num_iterations_em=100,
                                 num_iterations_tv_min=100, num_iterations_nag_ls=100,
                                 lamda=0.0001, only_results=False)
-plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_2000_filterI_phase3")
+plot_learned_filter(model_deepfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/deepfbp_2000_filterI_sparse_phase3")

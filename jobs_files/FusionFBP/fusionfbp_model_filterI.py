@@ -12,10 +12,10 @@ test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground
 
 # define parameters
 n_single_BP = 90
-sparse_view = True
+sparse_view = False
 view_angles = 90
 alpha = 1
-i_0 = 100000
+i_0 = 25000
 sigma = 0.001
 max_len_train = 2000
 max_len_val = 240
@@ -30,16 +30,16 @@ scheduler = True
 patience = 15
 
 
-model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/fusiondbp_2000_sparse_FilterI"
-log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/fusiondbp_2000_sparseFilterI.log"
-figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/fusiondbp_2000_sparse_FilterI"
+model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/fusiondbp_2000_sparse_25_FilterI"
+log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/fusiondbp_2000_sparse_25_FilterI.log"
+figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/fusiondbp_2000_sparse_25_FilterI"
 
 # define model arquitecture
 model_fusionfbp = FusionFBP(model_path, filter_type, sparse_view, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file)
-plot_learned_filter(model_fusionfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/fusiondbp_2000_sparse_FilterI_initial")
+plot_learned_filter(model_fusionfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/fusiondbp_2000_sparse_25_FilterI_initial")
 # training and validation
 history = model_fusionfbp.train(training_path, validation_path, figure_path, max_len_train, max_len_val, patience)
-plot_learned_filter(model_fusionfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/fusiondbp_2000_sparse_FilterI_phase3")
+plot_learned_filter(model_fusionfbp.model.learnable_filter, save_path="/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/fusiondbp_2000_sparse_25_FilterI_phase3")
 # saving model configuration
 model_fusionfbp.save_config()
 

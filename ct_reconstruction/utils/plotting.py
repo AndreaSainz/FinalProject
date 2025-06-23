@@ -1,22 +1,23 @@
 """
 Visualization utilities for CT reconstruction experiments.
 
-This module provides helper functions for plotting training curves,
-comparing model outputs against ground truth images, and visualizing
-reconstructions from various CT algorithms.
+This module provides standardized plotting functions to support:
+- Model performance evaluation
+- Comparison of reconstructions against ground truth
+- Metric tracking over training epochs
+- Presentation-quality visualization for CT algorithms
 
-Includes:
-    - Side-by-side image comparisons (output vs. ground truth)
-    - Epoch-based visual tracking of reconstructions
-    - Metric plotting with optional test/reference overlay
-    - Visualization of outputs from multiple reconstruction pipelines
-
-These functions are intended for use in model evaluation, debugging,
-and presentation of CT reconstruction results.
+Features:
+    - Side-by-side image comparisons (reconstruction vs. ground truth)
+    - Epoch-based visual tracking of outputs
+    - Training/validation/test metric plots
+    - Frequency-domain filter visualization
+    - Comparative reconstruction display across algorithms
+    - Metric distribution summaries with violin plots
 
 Example:
     >>> from ct_reconstruction.utils.visualization import show_example, plot_metric
-    >>> show_example(output, target)
+    >>> show_example(output_img, target_img)
     >>> plot_metric(range(50), {"train": train_loss, "val": val_loss}, "Loss", "Epoch", "MSE")
 """
 
@@ -145,61 +146,6 @@ def plot_metric(x, y_dict, title, xlabel, ylabel, test_value=None, save_path=Non
     
     plt.close()
 
-def plot_learned_filter(filter_module, angle_idx=None, angle=None, title=None, save_path="figures/"):
-    """
-    Plots the learned frequency-domain filter from a LearnableFilter module.
-
-    Supports both shared filters and per-angle filters. If per-angle and angle_idx is not provided,
-    plots the mean filter across all angles.
-
-    Args:
-        filter_module (LearnableFilter): Instance of the LearnableFilter class.
-        angle_idx (int, optional): Index of the angle to visualize (used in per-angle mode).
-        angle (int, optional): Angle label for title purposes.
-        title (str, optional): Custom title for the plot.
-        save_path (str): Base path for saving the plotted figure.
-    """
-
-    weights = filter_module.weights
-
-    if filter_module.per_angle:
-        filter_type = "FilterII"
-        if angle_idx is not None:
-            weights = weights[angle_idx]
-            default_title = f"Filter II for Angle Index {angle}"
-            file_suffix = f"{filter_type}_{angle}"
-        else:
-            # Compute mean filter across all angles
-            weights = weights.mean(dim=0)
-            default_title = "Mean Filter II over all angles"
-            file_suffix = f"{filter_type}_mean"
-    else:
-        filter_type = "FilterI"
-        default_title = "Shared Filter I (all angles)"
-        file_suffix = f"{filter_type}"
-
-    # Prepare weights for plotting
-    if weights.ndim > 1:
-        weights = weights.squeeze()
-    weights = weights.detach()
-
-    D = len(weights)
-    freqs = torch.fft.fftshift(torch.fft.fftfreq(D))
-    filter_shifted = torch.fft.fftshift(weights)
-
-    freqs_np = freqs.cpu().numpy()
-    filter_np = filter_shifted.cpu().numpy()
-
-    plt.figure(figsize=(6, 4))
-    plt.fill_between(freqs_np, 0, filter_np, color="steelblue")
-    plt.xlabel("frequency")
-    plt.ylabel("amplitude")
-    plt.title(title if title else default_title)
-    plt.ylim(0, 1.0)
-    plt.grid(False)
-    plt.tight_layout()
-    plt.savefig(f"{save_path}_{file_suffix}.png")
-    plt.close()
 
 def plot_different_reconstructions(model_type, sample, recon_dict, output_img, ground_truth, save_path=None):
     """
@@ -256,6 +202,9 @@ def plot_learned_filter(filter_module, angle_idx=None, angle=None, title=None, s
         angle (int, optional): Angle label for title purposes.
         title (str, optional): Custom title for the plot.
         save_path (str): Base path for saving the plotted figure.
+
+    Example:
+    >>> plot_learned_filter(model.learnable_filter, angle_idx=5, angle=45, save_path="figs/filter")
     """
 
     weights = filter_module.weights

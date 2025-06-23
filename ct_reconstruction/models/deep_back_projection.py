@@ -60,7 +60,7 @@ class DBP(ModelBase):
         ...     scheduler="ReduceLROnPlateau",
         ...     log_file="logs/dbp_training.log"
         ... )
-        >>> x = torch.randn(4, 10, 128, 128)  # input tensor
+        >>> x = torch.randn(4, 90, 362, 362)  # input tensor
         >>> output = model(x)  # forward pass
         >>> model.save_config()  # save model configuration
     """
@@ -174,9 +174,8 @@ class DBP(ModelBase):
                 H, W = spatial dimensions.
 
         Returns:
-            torch.Tensor: Output tensor of shape (B, 1, H, W), representing the reconstructed image.
+            torch.Tensor: Output tensor of shape (B, 1, H, W), representing the reconstructed CT image.
         """
-        print(x.shape)
         
         # initial part
         conv1 = self.conv1(x)

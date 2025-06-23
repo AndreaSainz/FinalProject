@@ -34,6 +34,17 @@ class LearnableFilter(Module):
 
 
     def forward(self, x):
+        """
+        Applies the learnable frequency filter to each projection.
+
+        Args:
+            x (Tensor): Input sinogram of shape [B, A, D], where
+                B = batch size, A = number of angles, D = number of detectors.
+
+        Returns:
+            Tensor: Filtered sinogram of the same shape.
+        """
+
         ftt1d = torch.fft.fft(x, dim=-1)
         if self.per_angle:
             filtered = ftt1d * self.weights[None, :, :]
@@ -45,7 +56,13 @@ class LearnableFilter(Module):
 
 class IntermediateResidualBlock(Module):
     """
-    Depthwise 1D residual block used in angular interpolation.
+    Depthwise 1D residual block used for angular interpolation.
+
+    Each channel is processed independently (depthwise convolution),
+    allowing flexible angle-wise feature transformation.
+
+    Args:
+        channels (int): Number of input/output channels (must match).
     """
     def __init__(self, channels):
         super().__init__()
@@ -101,7 +118,7 @@ class DeepFBPNetwork(Module):
         self.A_ = A
         self.AT = to_autograd(self.A_.T, is_2d=True, num_extra_dims=2)
 
-        # Padding parameters
+        # Padding to reach power-of-two size for FFT
         self.projection_size_padded = self.compute_projection_size_padded()
         self.padding = self.projection_size_padded - self.num_detectors
 
@@ -112,8 +129,6 @@ class DeepFBPNetwork(Module):
         else:
             self.learnable_filter = LearnableFilter(ram_lak, per_angle=True, num_angles=self.num_angles_)
 
-        print(self.learnable_filter.weights.shape)
-
         # Interpolation blocks
         self.interpolator_1 = IntermediateResidualBlock(1)
         self.interpolator_2 = IntermediateResidualBlock(1)
@@ -122,7 +137,7 @@ class DeepFBPNetwork(Module):
 
         # Tomosipo normalization map (1s projection)
         sinogram_ones = torch.ones((1,1, self.num_angles_, num_detectors), device=self.device)
-        self.tomosipo_normalizer = self.AT(sinogram_ones) + 1e-6
+        self.tomosipo_normalizer = self.AT(sinogram_ones) + 1e-6  # Avoid division by zero in normalization
 
         # Denoising blocks
         self.denoising_conv_1 = Conv2d(1, 64, kernel_size=1)
@@ -153,6 +168,23 @@ class DeepFBPNetwork(Module):
         return f
     
     def forward(self, x):
+        """
+    Runs a forward pass through the DeepFBP pipeline.
+
+    Steps:
+        1. Apply learnable frequency-domain filter.
+        2. Perform angular interpolation via 1D convolutions.
+        3. Apply differentiable backprojection using Tomosipo.
+        4. Normalize projection output.
+        5. Apply residual 2D CNN denoising network.
+
+    Args:
+        x (Tensor): Input sinogram of shape [B, 1, A, D].
+
+    Returns:
+        Tensor: Reconstructed image tensor of shape [B, 1, H, W], with pixel values in [0, 1].
+    """
+
         # Initial shape: [B, 1, A, D]
         x = x.squeeze(1)  # [B, A, D]
         x = pad(x, (0, self.padding), mode="constant", value=0)
@@ -166,6 +198,8 @@ class DeepFBPNetwork(Module):
         x = self.interpolator_2(x)
         x = self.interpolator_3(x)
         x = self.interpolator_conv(x)
+        
+        # Reshape back to sinogram format for backprojection
         x = x.view(-1, self.num_angles_, self.num_detectors).unsqueeze(1)
 
         # Differentiable backprojection
@@ -221,7 +255,7 @@ class DeepFBP(ModelBase):
 
     Attributes:
         model (DeepFBPNetwork): The underlying neural architecture.
-        current_phase (int): The training phase currently in use (1–3).
+        current_phase (int): Indicates which components are currently being trained (1=filter only, 2=+interpolation, 3=full model).
     """
 
     def __init__(self, model_path, filter_type, sparse_view, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed,accelerator, scheduler, log_file):
@@ -314,7 +348,7 @@ class DeepFBP(ModelBase):
         config = {
             "model_type": self.model_type,
             "model_path": self.model_path,
-            "sparse-view": self.sparse_view,
+            "sparse_view": self.sparse_view,
             "view_angles": self.view_angles,
             "filter_type" : self.filter_type,
             "current_phase" : self.current_phase,

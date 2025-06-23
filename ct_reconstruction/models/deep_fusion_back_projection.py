@@ -35,6 +35,15 @@ class LearnableFilter(Module):
             self.register_parameter("weights", Parameter(filters))
 
     def forward(self, x):
+        """
+        Applies learnable frequency-domain filtering to each projection.
+
+        Args:
+            x (Tensor): Input sinogram of shape [B, A, D].
+
+        Returns:
+            Tensor: Filtered sinogram of shape [B, A, D].
+        """
         ftt1d = torch.fft.fft(x, dim=-1)
         if self.per_angle:
             filtered = ftt1d * self.weights[None, :, :]
@@ -269,45 +278,32 @@ class DBP_block(Module):
 
 class DeepFusionBPNetwork(Module):
     """
-    High-level model manager for Deep Fusion Backprojection (DeepFusionBP).
+    Neural architecture for Deep Fusion Backprojection (DeepFusionBP).
 
-    Handles geometry setup, model instantiation, training configuration, and logging.
+    This module implements the full reconstruction pipeline including:
+        - A learnable frequency-domain filter (shared or per-angle).
+        - Angular interpolation using a stack of 1D residual convolutions.
+        - Differentiable single-angle backprojections via Tomosipo.
+        - A deep CNN (based on DBP) to fuse and denoise reconstructed views.
 
     Args:
-        model_path (str): Path to save model artifacts.
-        filter_type (str): Type of frequency-domain filter ('Filter I' or per-angle).
-        view_angles (int): Number of angles in sparse-view mode.
-        alpha (float): Log transform scaling for preprocessing.
-        i_0 (float): Incident photon count (used in noise simulation).
-        sigma (float): Std. dev. for additive Gaussian noise.
-        batch_size (int): Training batch size.
-        epochs (int): Total training epochs.
-        learning_rate (float): Optimizer learning rate.
-        debug (bool): Enables verbose/debug plotting if True.
-        seed (int): Random seed.
-        accelerator (torch.device): Computation device.
-        scheduler (str): LR scheduler identifier.
-        log_file (str): Path to training log file.
+        angles_sparse (torch.Tensor): Sparse subset of projection angles.
+        src_orig_dist (float): Source-to-origin distance used in CT geometry.
+        num_detectors (int): Number of detector bins per projection.
+        num_angles (int): Number of sparse angles used in this configuration.
+        vg (ts.VolumeGeometry): Tomosipo volume geometry for reconstruction.
+        A (ts.Operator): Tomosipo projection operator (unused here but stored).
+        filter_type (str): Either "Filter I" (shared filter) or "per-angle".
+        device (torch.device): Device where the model will run (e.g., "cuda").
 
-    Example:
-        >>> model = DeepFusionBP(
-        >>>     model_path="checkpoints/deepfbp",
-        >>>     filter_type="Filter I",
-        >>>     view_angles=60,
-        >>>     alpha=0.001,
-        >>>     i_0=1e5,
-        >>>     sigma=0.01,
-        >>>     batch_size=4,
-        >>>     epochs=100,
-        >>>     learning_rate=1e-4,
-        >>>     debug=True,
-        >>>     seed=42,
-        >>>     accelerator=torch.device("cuda"),
-        >>>     scheduler="cosine",
-        >>>     log_file="training.log"
-        >>> )
-        >>> model.train(train_loader, val_loader)
-        >>> model.save_config()
+    Forward Input:
+        x (Tensor): Input sinogram of shape [B, 1, A, D], where:
+            - B: batch size,
+            - A: number of sparse projection angles,
+            - D: number of detector bins.
+
+    Returns:
+        Tensor: Reconstructed CT images of shape [B, 1, H, W].
     """
     def __init__(self, angles_sparse, src_orig_dist, num_detectors, num_angles, vg, A, filter_type, device):
         super().__init__()
@@ -347,7 +343,13 @@ class DeepFusionBPNetwork(Module):
 
     def compute_projection_size_padded(self):
         """
-        Computes the next power-of-two padding size to avoid aliasing.
+        Computes the padded projection width for frequency-domain filtering.
+
+        This ensures the sinogram is padded to the nearest power of two to avoid
+        aliasing artifacts when applying FFT-based filters.
+
+        Returns:
+            int: Projection size after zero-padding.
         """
         return 2 ** int(torch.ceil(torch.log2(torch.tensor(self.num_detectors, dtype=torch.float32))).item())
 
@@ -364,6 +366,24 @@ class DeepFusionBPNetwork(Module):
     
     
     def forward(self, x):
+        """
+        Performs forward pass through the DeepFusionBP network.
+
+        The input sinogram goes through:
+            1. Learnable frequency-domain filtering (Ram-Lak initialized).
+            2. Angular interpolation via 1D depthwise convolutions.
+            3. Single-angle differentiable backprojections (Tomosipo).
+            4. A deep CNN that fuses and denoises the backprojections.
+
+        Args:
+            x (torch.Tensor): Input sinogram of shape [B, 1, A, D], where:
+                - B: batch size,
+                - A: number of angles (sparse),
+                - D: number of detectors.
+
+        Returns:
+            torch.Tensor: Reconstructed image of shape [B, 1, H, W], where H=W=362.
+        """
 
         # Initial shape: [B, 1, A, D]
         x = x.squeeze(1)  # [B, A, D]
@@ -395,37 +415,59 @@ class DeepFusionBPNetwork(Module):
 
 class DeepFusionBP(ModelBase):
     """
-    High-level wrapper for training and managing the DeepFusionBP model.
+    High-level model wrapper for Deep Fusion Backprojection (DeepFusionBP).
 
-    This class extends `ModelBase` and encapsulates the DeepFBP-specific functionality, including
-    configurable projection geometry (sparse or full view), structured training phases,
-    and model configuration serialization.
+    This class integrates geometry setup, training management, and configuration
+    handling for the DeepFusionBP neural reconstruction model.
 
-    DeepFBP enhances classical FBP by integrating:
-        - Trainable frequency-domain filtering (shared or per-angle)
-        - Learnable 1D angular interpolation modules
-        - Residual 2D CNN-based image denoising
+    The architecture improves over traditional Filtered Backprojection (FBP) by combining:
+        - Learnable frequency-domain filtering (either shared or per-angle),
+        - Angular interpolation using depthwise 1D convolutions,
+        - Differentiable backprojections for each angle (Tomosipo),
+        - A DBP-style CNN to fuse and denoise intermediate reconstructions.
 
     Args:
-        model_path (str): Path to save model checkpoints and logs.
-        filter_type (str): Filtering strategy. "Filter I" for shared filter, others for per-angle.
-        sparse_view (bool): Whether to use sparse-angle projection geometry.
-        view_angles (int): Number of angles if using sparse-view mode.
-        alpha (float): Log-scaling factor for sinogram preprocessing.
-        i_0 (float): Incident photon count for noise simulation.
-        sigma (float): Standard deviation for additive Gaussian noise.
-        batch_size (int): Number of samples per training batch.
+        model_path (str): Path to save model checkpoints, logs, and config.
+        filter_type (str): Type of frequency-domain filter ("Filter I" or "per-angle").
+        view_angles (int): Number of projection angles in sparse-view mode.
+        alpha (float): Normalization factor for sinograms and images.
+        i_0 (float): Incident photon count for Poisson noise modeling.
+        sigma (float): Std. dev. of Gaussian noise added to sinograms.
+        batch_size (int): Number of samples per batch during training.
         epochs (int): Total number of training epochs.
-        learning_rate (float): Optimizer learning rate.
-        debug (bool): If True, enables verbose output and plotting.
+        learning_rate (float): Initial learning rate for the optimizer.
+        debug (bool): If True, enables verbose logging and debug plots.
         seed (int): Random seed for reproducibility.
-        accelerator (torch.device): Device for training.
+        accelerator (torch.device): Device for model training/inference.
         scheduler (str): Learning rate scheduler identifier.
-        log_file (str): Log file path for training events.
+        log_file (str): Path to log file.
 
     Attributes:
-        model (DeepFBPNetwork): The underlying neural architecture.
-        current_phase (int): The training phase currently in use (1–3).
+        model (DeepFusionBPNetwork): The underlying deep reconstruction network.
+        filter_type (str): Chosen filter strategy ("Filter I" or "per-angle").
+
+    Example:
+        >>> import torch
+        >>> from ct_reconstruction.models import DeepFusionBP
+        >>> model = DeepFusionBP(
+        ...     model_path="checkpoints/deepfusionbp",
+        ...     filter_type="Filter I",
+        ...     view_angles=50,
+        ...     alpha=0.001,
+        ...     i_0=1e5,
+        ...     sigma=0.01,
+        ...     batch_size=4,
+        ...     epochs=100,
+        ...     learning_rate=1e-4,
+        ...     debug=True,
+        ...     seed=42,
+        ...     accelerator=torch.device("cuda"),
+        ...     scheduler="cosine",
+        ...     log_file="training.log"
+        ... )
+        >>> model.train("data/train", "data/val", save_path="outputs/deepfusionbp")
+        >>> test_results = model.test("data/test", max_len_test=128)
+        >>> model.results(mode="both", save_path="outputs/plots")
     """
 
     def __init__(self, model_path, filter_type, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed,accelerator, scheduler, log_file):

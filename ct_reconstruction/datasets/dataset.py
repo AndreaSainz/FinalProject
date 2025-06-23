@@ -10,50 +10,49 @@ import logging
 
 class LoDoPaBDataset(Dataset):
     """
-    PyTorch Dataset for low-dose CT image reconstruction using the LoDoPaB-CT dataset.
+    PyTorch Dataset for Low-Dose CT image reconstruction using the LoDoPaB-CT dataset.
 
     This dataset class supports:
-    - Loading CT slices and sinograms from HDF5 files (local or GCS).
-    - Simulating realistic noisy measurements using Poisson and Gaussian noise.
-    - Generating sparse-view sinograms and single-angle backprojections for learning-based reconstruction.
+    - Loading CT slices and sinograms from local or GCS-based HDF5 files.
+    - Simulation of realistic measurement noise using a combination of Poisson and Gaussian models.
+    - Sparse-view sinogram generation and single-angle backprojections for learning-based CT reconstruction.
 
-    Parameters:
-        ground_truth_dir (str): Path to the dataset directory or GCS bucket. It should be, at least, 95% in the range [0-1]. 
-        Use the alpha to normalised the data in case this is not happening.
-        vg (ts.VolumeGeometry): tomosipo volume geometry for the image domain.
+    Args:
+        ground_truth_dir (str): Path to the directory or GCS bucket containing HDF5 files.
+        vg (ts.VolumeGeometry): tomosipo volume geometry.
         angles (np.ndarray): Full set of projection angles.
-        pg (ts.ProjectionGeometry): tomosipo projection geometry for the scanner.
-        A (ts.Operator): tomosipo operator for forward projection.
-        single_bp (bool): If True, compute single-angle backprojections.
-        n_single_BP (int): Number of angles to use for single-angle backprojections.
-        sparse_view (bool): If True, use sparse-view sinograms instead of full projections.
-        indices (list[int], optional): Custom angle indices for sparse view.
-        alpha (float): Normalization factor for ground truth and sinograms.
-        i_0 (float): Incident photon count for Poisson noise simulation.
+        pg (ts.ProjectionGeometry): tomosipo projection geometry.
+        A (ts.Operator): tomosipo forward operator.
+        single_bp (bool): Whether to generate single-angle backprojections.
+        n_single_BP (int): Number of angles to use for single backprojections.
+        sparse_view (bool): Whether to use sparse-view sinograms.
+        view_angles (int): Number of angles in sparse view.
+        indices (list[int] or torch.Tensor, optional): Custom indices for sparse/single view.
+        alpha (float): Normalization factor to scale data in [0, 1].
+        i_0 (float): Incident photon count for Poisson noise.
         sigma (float): Standard deviation of Gaussian noise.
-        seed (int): Random seed for reproducibility.
-        max_len (int, optional): Max number of samples to load. Uses all available if None.
-        debug (bool): Enables verbose logging to console.
-        logger (logging.Logger, optional): Custom logger instance.
-        device (str): Device identifier for tensor operations (e.g., "cuda" or "cpu").
+        seed (int): Random seed for noise reproducibility.
+        max_len (int, optional): Max number of samples to load.
+        debug (bool): If True, prints debug messages.
+        logger (logging.Logger, optional): Custom logger.
+        device (str): Device string, e.g., 'cpu' or 'cuda'.
 
     Attributes:
-        files (List[str]): List of HDF5 file paths.
-        angles_SBP (np.ndarray): Subset of angles used for single-angle backprojections.
+        files (List[str]): Sorted list of file paths.
         slices_per_file (int): Number of slices in each HDF5 file.
+        indices (torch.Tensor): Selected angles for sparse or single-angle processing.
+
+    Notes:
+        The dataset expects each HDF5 file to contain the keys 'data' and 'sinograms'.
+        The last HDF5 file is excluded automatically due to unknown slice count (as described in the LoDoPaB-CT paper).
 
     Example:
         >>> import tomosipo as ts
         >>> import numpy as np
-        >>> from ct_reconstruction.datasets import LoDoPaBDataset
-
-        >>> # Define tomosipo geometry
-        >>> vg = ts.volume(shape=(362, 362), size=(26, 26))
+        >>> vg = ts.volume(shape=(362, 362))
         >>> angles = np.linspace(0, 2 * np.pi, 1000, endpoint=False)
-        >>> pg = ts.cone(angles=angles, src_orig_dist=575, src_det_dist=1050, shape=(1000, 513))
+        >>> pg = ts.cone(angles=angles, src_orig_dist=575, shape=(1, 513))
         >>> A = ts.operator(vg, pg)
-
-        >>> # Initialize dataset 
         >>> dataset = LoDoPaBDataset(
         ...     ground_truth_dir="data/lodopab/train",
         ...     vg=vg,
@@ -69,9 +68,8 @@ class LoDoPaBDataset(Dataset):
         ...     max_len=128,
         ...     debug=True
         ... )
-
-        >>> # Access a sample
         >>> sample = dataset[0]
+        >>> print(sample['ground_truth'].shape, sample['single_back_projections'].shape)
     """
 
 
@@ -336,15 +334,19 @@ class LoDoPaBDataset(Dataset):
 
     def _generate_single_backprojections(self, sinogram):
         """
-        Generates a set of backprojections from selected angles for sparse-view simulation.
+        Generates single-angle backprojections for each angle specified in `self.indices`.
 
-        Each angle is used to generate a single-angle backprojection using tomosipo.
+        Each selected angle is used to construct a 1-view sinogram and perform a backprojection using tomosipo's fan-beam geometry.
 
         Args:
             sinogram (torch.Tensor): Noisy sinogram of shape (1, num_angles, num_detectors).
 
         Returns:
-            torch.Tensor: Stack of backprojections of shape (n_single_BP, H, W).
+            torch.Tensor: A tensor of shape (n_single_BP, H, W) containing one backprojection per selected angle.
+
+        Note:
+            - Assumes `self.indices` and `self.angles` are properly initialized.
+            - The output contains one image per selected projection angle.
         """
 
         projections = []
@@ -373,28 +375,27 @@ class LoDoPaBDataset(Dataset):
 
     def __getitem__(self, idx):
         """
-        Gives a single sample from the dataset, including the ground truth image,
-        its corresponding sinogram (with and without noise), and optionally sparse-view
-        projections or single-angle backprojections.
+        Gives a sample from the dataset, including the ground truth image, its corresponding sinogram,
+        and optional noisy, sparse, or single-backprojection outputs depending on the mode.
 
-        This method supports multiple modes:
-        - Full sinogram with noise (default)
-        - Sparse-view sinogram (if `sparse_view=True`)
-        - Single-angle backprojections from sparse-view sinogram (if `single_bp=True`)
+        Modes:
+        - Default: Returns clean and noisy sinograms.
+        - Sparse view (`sparse_view=True`): Additionally returns sparse-view sinogram.
+        - Single backprojection (`single_bp=True`): Returns sparse-view sinogram and per-angle backprojections.
 
         Args:
-            idx (int): Index of the sample. Must be less than `max_len` if specified.
+            idx (int): Index of the sample. Must be < `max_len` if specified.
 
         Returns:
-            dict: A dictionary with the following keys:
-                - 'ground_truth' (torch.Tensor): Ground truth image of shape (1, H, W).
-                - 'sinogram' (torch.Tensor): Clean sinogram of shape (1, A, D).
-                - 'noisy_sinogram' (torch.Tensor): Noisy sinogram of shape (1, A, D). Included unless `single_bp=True`.
-                - 'sparse_sinogram' (torch.Tensor): Subsampled noisy sinogram if `sparse_view=True` or `single_bp=True`.
-                - 'single_back_projections' (torch.Tensor): Stack of single-angle backprojections of shape (n_single_BP, H, W), only if `single_bp=True`.
+            dict: Dictionary with the following keys depending on the mode:
+                - 'ground_truth' (torch.Tensor): Ground truth image, shape (1, H, W).
+                - 'sinogram' (torch.Tensor): Clean sinogram, shape (1, A, D).
+                - 'noisy_sinogram' (torch.Tensor): Noisy sinogram, shape (1, A, D). (not returned if `single_bp=True`)
+                - 'sparse_sinogram' (torch.Tensor): Subsampled noisy sinogram, shape (1, V, D), where V is the number of selected views.
+                - 'single_back_projections' (torch.Tensor): Backprojections from individual angles, shape (n_single_BP, H, W). Returned only if `single_bp=True`.
 
         Raises:
-            IndexError: If `idx` is out of range for the configured dataset length.
+            IndexError: If `idx` is out of range based on the configured `max_len`.
         """
 
         #checking the index when I do not want all the files

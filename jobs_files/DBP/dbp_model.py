@@ -12,7 +12,7 @@ test_path = '/home/as3628/rds/hpc-work/final_project_dis/as3628/data_sino/ground
 # define parameters
 n_single_BP = 90
 alpha = 1
-i_0 = 100000
+i_0 = 25000
 sigma = 0.001
 max_len_train = 2000
 max_len_val = 240
@@ -26,9 +26,9 @@ scheduler = True
 patience = 10
 
 
-model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_90_views_training_2000"
-log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_90_views_training_2000.log"
-figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_90_views_training_2000"
+model_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/dbp_90_views_lowdose_2000"
+log_file = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/logs/dbp_90_views_lowdose_2000.log"
+figure_path = "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/dbp_90_views_lowdose_2000"
 
 # define model arquitecture
 model_dbp = DBP(model_path, n_single_BP, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed, accelerator, scheduler, log_file)

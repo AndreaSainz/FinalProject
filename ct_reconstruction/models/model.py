@@ -365,7 +365,7 @@ class ModelBase(Module):
             train_dataloader (DataLoader): Dataloader for training data.
             opt (torch.optim.Optimizer): Optimizer instance.
             loss (nn.Module): Loss function.
-            epoch_idx (int): Current epoch number.
+            e (int): Current epoch number.
             save_path (str): Path prefix for saving visual outputs.
             show_examples (bool): If True, visualizes model predictions every 5 epochs.
             number_of_examples (int): Number of samples to visualize.
@@ -426,7 +426,7 @@ class ModelBase(Module):
                 elif torch.backends.mps.is_available():
                     torch.mps.empty_cache()
 
-
+        #save visualizations of fixed samples every 5 epochs
         if show_examples and fixed_input is not None and fixed_gt is not None and e % 5 == 0:
             with torch.no_grad():  # Asegura que no guarda gradientes
                 fixed_pred = self.model(fixed_input)
@@ -565,7 +565,7 @@ class ModelBase(Module):
             sample = next(iter(train_dataloader))["noisy_sinogram"]
         summary(self.model, input_size=tuple(sample.shape[1:])) #just for debugging
 
-        # confirmation for the model to be train 
+        # interactive confirmation before training, for debugging or manual approval
         if confirm_train:
             confirm = input("Is this the architecture you want to train? (yes/no): ")
             if confirm.strip().lower() != "yes":

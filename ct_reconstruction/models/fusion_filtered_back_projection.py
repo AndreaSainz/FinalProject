@@ -62,12 +62,15 @@ class IntermediateResidualBlock(Module):
 
 class DenoisingBlock(Module):
     """
-    Deep CNN block for image denoising used in FusionFBP.
+    Deep CNN block for denoising reconstructed CT images.
 
-    Consists of an initial conv block, 15 intermediate conv+BN+ReLU blocks,
-    and a final conv layer to restore the image. 
+    Architecture:
+        - One initial convolutional layer with ReLU
+        - Fifteen residual Conv2d + BatchNorm2d + ReLU blocks
+        - One final convolutional layer without activation
 
-    This is slightly change arquitecture base on DBP model but adapted to only one initial image.
+    This is adapted from the DBP model, but designed to process a single fused image 
+    rather than a stack of backprojections.
     """
     def __init__(self):
 
@@ -326,6 +329,27 @@ class FusionFBP(ModelBase):
         accelerator (torch.device): Device used for training.
         scheduler (str): Learning rate scheduler.
         log_file (str): Path to the training log file.
+
+    Example:
+    >>> model = FusionFBP(
+    ...     model_path="checkpoints/fusion",
+    ...     filter_type="Filter I",
+    ...     sparse_view=True,
+    ...     view_angles=60,
+    ...     alpha=0.001,
+    ...     i_0=1e5,
+    ...     sigma=0.01,
+    ...     batch_size=4,
+    ...     epochs=50,
+    ...     learning_rate=1e-4,
+    ...     debug=True,
+    ...     seed=42,
+    ...     accelerator=torch.device("cuda"),
+    ...     scheduler="ReduceLROnPlateau",
+    ...     log_file="training.log"
+    ... )
+    >>> model.train(...)
+    >>> model.save_config()
     """
 
     def __init__(self, model_path, filter_type, sparse_view, view_angles, alpha, i_0, sigma, batch_size, epochs, learning_rate, debug, seed,accelerator, scheduler, log_file):

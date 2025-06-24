@@ -101,13 +101,10 @@ def apply_algorithm_order(df, metric, order):
 
 
 folders = [
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/DBP",
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/DeepFusionBP/FilterI",
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/DeepFusionBP/FilterII",
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/DeepFBP_phase3/Sparse_normal_dose/FIlterI",
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/DeepFBP_phase3/Sparse_normal_dose/FilterII",
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/FusionDBP/Sparse_normal_dose/FilterI",
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/FusionDBP/Sparse_normal_dose/FilterII"
+    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/DeepFBP_phase3/Low_dose/FilterI",
+    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/DeepFBP_phase3/Low_dose/FilterII",
+    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/FusionDBP/Low_dose/FilterI",
+    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/FusionDBP/Low_dose/FilterII"
 ]
 
 df_psnr, df_ssim, df_mse = collect_metrics_from_folders(folders)
@@ -120,7 +117,7 @@ df_mse = apply_algorithm_order(df_mse, "MSE", algorithm_order)
 
 # Dibujar gráficas
 plot_results_distributions(
-    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/report_metrics_sparse",
+    "/home/as3628/rds/hpc-work/final_project_dis/as3628/models/figures/report_metrics_lowdose",
     df_psnr, df_ssim, df_mse
 )
 

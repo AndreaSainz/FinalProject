@@ -24,7 +24,11 @@ docs/sphinx-env/
 *.swo
 
 #No images
-*.png 
+jobs_files/data_analysis/*.png 
+jobs_files/DeepFBP/*.png 
+jobs_files/DeepFBP/pruebas_deepfbp/*
+jobs_files/DeepFusionBP/*.png 
+jobs_files/FusionFBP/*.png 
 
 # Testing
 .pytest_cache/

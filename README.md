@@ -21,8 +21,8 @@ This project made active use of **OpenAI's ChatGPT** as a development assistant 
 - **Logging & Callbacks**  
   The `configure_logger` function and `EarlyStopping` class were developed with guidance from ChatGPT for clarity and maintainability.
 
-- **DeepFBP Class Construction**  
-  ChatGPT was instrumental in turning my custom filtered backprojection and backprojector scripts into a modular and learnable PyTorch class (`DeepFBP`). It suggested proper `nn.Module` subclassing, tensor-safe differentiable layers, and forward-pass logic integration.
+- **Model Class Constructions**  
+  ChatGPT was instrumental in turning my custom filtered backprojection and backprojector scripts into a modular and learnable PyTorch class (`DeepFBP` and its derivates 'DeepFusionBP, FusionFBP'). It suggested proper `nn.Module` subclassing, tensor-safe differentiable layers, and forward-pass logic integration.
 
 - **Code Refactoring & Optimization**  
   Provided suggestions for making code more modular, scalable, and readable without sacrificing performance.
@@ -138,18 +138,20 @@ docs/_build/html
 ```
 ct_reconstruction/
 ├── callbacks/
-│   └── early_stopping.py         # EarlyStopping with logging
+│   ├── early_stopping.py                # EarlyStopping with logging
 ├── datasets/
-│   └── dataset.py                # LoDoPaBDataset loading, noise simulation, projection logic
+│   ├── dataset.py                       # LoDoPaBDataset loading, noise simulation, projection logic
 ├── models/
-│   ├── deep_back_projection.py   # Deep BackProjection architecture
-│   ├── deep_filtered_back_projection.py  # Learnable Deep FBP using tomosipo
-│   └── model.py                  # Wrapper model loader for training, validation and testing
+│   ├── deep_back_projection.py          # DBP architecture
+│   ├── deep_filtered_back_projection.py # Learnable DeepFBP using tomosipo
+│   ├── deep_fusion_back_projection.py   # Fusion of DeepFBP and DBP 
+│   ├── fusion_filtered_back_projection.py # Fusion of DeepFBP with DBP as denoiser
+│   ├── model.py                         # Wrapper model loader for training, validation and testing
 ├── utils/
-│   ├── loggers.py                # Logging configuration
-│   ├── metrics.py                # PSNR, SSIM, MSE implementations
-│   ├── plotting.py               # Training curves & comparison plots
-│   └── open_files.py             # Helpers to load pretrained models with weights
+│   ├── loggers.py                       # Logging configuration
+│   ├── metrics.py                       # PSNR, SSIM, MSE implementations
+│   ├── open_files.py                    # Helpers to load pretrained models with weights
+│   ├── plotting.py                      # Training curves, comparison plots and report plots
 └── version.py
 ```
 
@@ -182,45 +184,157 @@ project_root/
 │   ├── ground_truth_train/
 │   ├── ground_truth_validation/
 │   └── ground_truth_test/
-│   ├── observation_train/
-│   ├── observation_validation/
-│   └── observation_test/
 ```
 
 ## Data Processing
 
-To prepare the data for training and evaluation, you need to simulate both full-dose and low-dose sinograms from the ground truth CT images.
+To prepare the data for training and evaluation, **full-dose sinograms** are simulated from ground truth CT images using forward projection.
 
-This is done using the script `sinograms_simulation.py`, which performs the following steps:
+This is handled by the script [`sinogram_simulation.py`](jobs_files/data_analysis/sinogram_simulation.py), which performs the following steps:
 
-1. **Upsampling**: The ground truth images are upsampled from 362×362 to 1000×1000 pixels using bilinear interpolation. This is done to avoid the *inverse crime* during forward projection.
-2. **Projection**: The upsampled images are projected using the tomosipo **fan-beam geometry** (via `ts.cone`) to compute the clean sinogram. Although the operator is called `ts.cone`, in 2D it corresponds to a fan-beam setup, as used in clinical CT.
-3. **Saving**: Two outputs are generated and saved for each image:
-   - A **full-dose version**, which directly uses the clean sinogram.
-   - A **low-dose version**, created by simulating realistic Poisson noise with a reduced photon count (`N₀ = 4096`), followed by normalization using a maximum attenuation coefficient (`μ_max = 81.35858`, ensuring that CT images lie in the [0, 1] range), and finally applying the Beer–Lambert transform.
+1. **Input Loading**  
+   CT slices of size **362×362** are loaded directly from preprocessed HDF5 files. No resizing or upsampling is applied.
 
-Each image and its corresponding sinogram (either full-dose or low-dose) is saved in a `.hdf5` file under separate output folders.
+2. **Forward Projection**  
+   Each image is projected using [**tomosipo**](https://github.com/tomographic-imaging/tomosipo)’s `ts.cone` operator to simulate a **clean, noise-free sinogram** using fan-beam geometry. Although the operator is named `cone`, in 2D it corresponds to a standard clinical fan-beam setup.
 
-Run `sinogram_simulation.py` once for each dataset split (`train`, `validation`, `test`). The results will be stored under `data_sino/`.
+3. **Output Saving**  
+   For each image, a new HDF5 file is saved containing:
+   - `data`: the original CT slice.
+   - `sinograms`: the corresponding clean sinogram (result of forward projection).
 
-After processing, the `data_sino/` directory should have the following structure:
+
+Each image and its corresponding sinogram is saved in a `.hdf5` file under separate output folders.
+
+Run `sinogram_simulation.py` once for each dataset split (`train`, `validation`, `test`). The resulting files will be stored under `data_sino/`, structured as follows:
 ```
 project_root/
 ├── data_sino/
 │   ├── ground_truth_train/
 │   ├── ground_truth_validation/
 │   ├── ground_truth_test/
-│   ├── observation_train/
-│   ├── observation_validation/
-│   └── observation_test/
 ```
 Each HDF5 file contains:
 - `data`: the original CT image (362×362)
-- `sinograms`: the simulated sinogram (either full-dose or low-dose)
+- `sinograms`: the simulated sinogram 
 
 This format ensures consistent pairing between ground truth images and sinograms, and accelerates data loading during training.
 
-> **Note:** The full simulation process should take under 2 hours on GPU, depending on your hardware and parallelization.
+> **Note:**  
+> - The fan-beam setup uses 1000 projection angles and 513 detectors, following the LoDoPaB configuration (`src_orig_dist = 575`).  
+> - GPU acceleration is supported if tomosipo is properly installed with CUDA backends.  
+> - The full simulation process typically completes in under 2 hours depending on hardware and parallelization.
+
+
+# Model Architectures & Training Options
+
+This repository supports four modular and configurable models for CT reconstruction, implemented as subclasses of a generic ModelBase. Each model integrates deeply with a full training pipeline including data loading, sinogram generation, physics-based operators, evaluation metrics, visualization, and reproducibility tools.
+
+
+###  DeepFBP
+
+A physics-informed deep model with a learnable frequency filter, interpolation network, and image-space denoiser.
+
+**Main Components**:
+-	Learnable filter (shared or per-angle)
+-	1D angular interpolation with depthwise convolutions
+-	2D CNN residual denoiser (3 blocks)
+-	Differentiable fan-beam backprojection via Tomosipo
+
+**Training Options**:
+-	filter_type: "Filter I" (shared) or "Filter II" (per-angle)
+-	Full-view or sparse-view sinogram input
+-	Dose control: i_0 (incident intensity), sigma (Gaussian noise), alpha (scaling)
+-	phase: staged training (1: filter only, 2: +interpolation, 3: full model)
+
+
+### DBP
+
+A classic deep architecture for stacked single-angle backprojections.
+
+**Main Components**:
+- 90 single-angle backprojections (Tomosipo)
+- 17-layer deep CNN:
+  - 1 initial conv + ReLU
+  - 15 conv+BN+ReLU blocks
+  - 1 final conv layer
+
+**Training Options**:
+-	Only compatible with single_bp=True (Sparse-view)
+-	Adjustable number of backprojections (n_single_BP)
+-	Dose control: i_0, sigma, alpha
+-	Fully compatible with early stopping, LR scheduling, and example visualization
+
+
+### FusionFBP
+
+Combines the filtering and interpolation of DeepFBP with the deep denoiser of DBP.
+
+**Main Components**:
+- Same initial arquitecture as DeepFBP (learnable filter + interpolation)
+- 15-layer DBP-style CNN for image denoising
+
+**Training Options**:
+- `filter_type: "Filter I" or "Filter II"
+-  Full-view or sparse-view input
+-  Full noise model configuration
+-  phase: staged training (1: filter, 2: +interp, 3: full)
+
+### DeepFusionBP
+
+A hybrid architecture using stacked backprojections as image-space features.
+
+**Main Components**:
+- Learnable filtering + interpolation (like DeepFBP)
+- Single-angle differentiable backprojections (Tomosipo)
+- 15-layer DBP CNN operating on stacked images
+
+**Training Options**:
+- `filter_type`: `"Filter I"` (shared) or `"Filter II"`
+-  Only Sparse view
+-  All kind of doses by adapting `I_0` and sigma  (control noise model)
+- `phase`: staged training (1: filter, 2: +interpolation, 3: full model)
+
+###  Model Comparison
+
+| Model          | Filter | Interpolation | Backprojections | Denoiser       | View Mode     |
+|----------------|--------|---------------|-----------------|----------------|---------------|
+| DeepFBP        | ✅      | ✅             | ❌              | CNN (residual) | Full / Sparse |
+| DBP            | ❌      | ❌             | ✅              | Deep CNN       | Sparse        |
+| FusionFBP      | ✅      | ✅             | ❌              | DBP-style CNN  | Full / Sparse |
+| DeepFusionBP   | ✅      | ✅             | ✅              | DBP-style CNN  | Sparse        |
+
+
+## Training Pipeline Overview
+
+All models inherit from ModelBase, which handles:
+-  Reproducible training with fixed seeds across PyTorch, NumPy, and Python
+-  LoDoPaB dataset loading with automatic noise/sinogram simulation
+-  Tomosipo-based volume and projection geometry setup (fan beam)
+-  full-view, sparse-view, or single backprojection modes
+-  Optimizer: Adam / AdamW and loss: MSELoss / L1Loss
+-  Validation with PSNR / SSIM / MSE tracking
+-  Automatic model checkpointing and early stopping
+-  Optional learning rate scheduler (ReduceLROnPlateau)
+-  Visual logging of examples every N epochs
+-  Optional CLI/user prompt to confirm architecture before training
+
+## Evaluation & Results
+
+The ModelBase supports flexible testing and results analysis:
+- Full test pipeline with .pt output files (reconstructions, sinograms, ground truths)
+- Automatic inference under different angular offsets (e.g. for generalization)
+- Training and test metrics saved as .json
+- Plotting of training curves: loss, PSNR, SSIM
+- Visualization of prediction vs ground truth images
+- Integrated evaluation against:
+	-	FBP
+	-	SIRT
+	-	EM
+	-	TV-minimization
+	-	NAG-LS
+- PSNR / SSIM / MSE distributions saved as .csv
+- Summary statistics (mean/std) and bar plots for all algorithms
 
 ## License
 
@@ -231,7 +345,5 @@ This project is released under the MIT License.
 
 - [LoDoPaB-CT Dataset](https://www.nature.com/articles/s41597-021-00893-z)
 - [tomosipo](https://github.com/ahendriksen/tomosipo)
-
-
-
-
+- [DeepFBP](https://ieeexplore.ieee.org/document/10411896)
+- [DBP](https://arxiv.org/abs/1807.02370)

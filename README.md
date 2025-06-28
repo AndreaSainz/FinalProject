@@ -3,6 +3,34 @@ This is a private repository for the final project submission for the MPhil in D
 
 The project implements a complete, modular deep learning pipeline for low-dose CT image reconstruction, built around a custom Python package: `ct_reconstruction`.
 
+##  Table of Contents
+
+- [Declarations of Use of Autogeneration Tools](#declarations-of-use-of-autogeneration-tools)  
+  - [Areas Where ChatGPT Was Used](#areas-where-chatgpt-was-used)  
+  - [Areas Where DeepL Was Used](#areas-where-deepl-was-used)  
+  - [Example Interaction](#example-interaction)  
+- [Installation](#installation)  
+  - [Copy the Repository](#copy-the-repository)  
+  - [Environment](#environment)  
+  - [Requirements](#requirements)  
+- [Documentation](#documentation)  
+- [Package Structure: `ct_reconstruction`](#package-structure-ct_reconstruction)  
+- [Data Downloading](#data-downloading)  
+  - [Download from Zenodo](#download-from-zenodo)  
+  - [Unzip and Organize](#unzip-and-organize)  
+- [Data Processing](#data-processing)  
+- [Model Architectures & Training Options](#model-architectures--training-options)  
+  - [DeepFBP](#deepfbp)  
+  - [DBP](#dbp)  
+  - [FusionFBP](#fusionfbp)  
+  - [DeepFusionBP](#deepfusionbp)  
+  - [Model Comparison](#model-comparison)  
+- [Training Pipeline Overview](#training-pipeline-overview)  
+- [Evaluation & Results](#evaluation--results)  
+- [License](#license)  
+- [Acknowledgments](#acknowledgments)
+
+
 ## Declarations of use of autogeneration tools 
 
 This project made active use of ChatGPT and DeepL Write as writing and development assistants throughout its creation.

@@ -37,10 +37,9 @@ This project made active use of ChatGPT and DeepL Write as writing and developme
 ### Areas Where DeepL Was Used 
 
 Used for academic style refinement of written text:
-	-	Language Polishing
-Text segments (especially in the report and README) were revised using DeepL Write to improve clarity, tone, and grammatical precision in English.
-	-	**Important Note**:
-DeepL Write does not generate new content, it only reformulates existing text written to be more fluent and formal. It was not used to create any technical explanations or original text.
+-	Language Polishing : Text (especially in the report and README) was revised using DeepL Write to improve clarity, tone, and grammatical precision in English.
+
+-	**Important Note**: DeepL Write does not generate new content, it only reformulates existing text written to be more fluent and formal. It was not used to create any technical explanations or original text.
 
 ---
 

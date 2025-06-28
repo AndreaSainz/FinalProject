@@ -24,7 +24,7 @@ docs/sphinx-env/
 *.swo
 
 #No images
-#*.png
+*.png
 jobs_files/data_analysis/*.png 
 jobs_files/DeepFBP/*.png 
 jobs_files/DeepFBP/pruebas_deepfbp/*

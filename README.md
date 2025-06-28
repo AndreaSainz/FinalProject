@@ -5,7 +5,7 @@ The project implements a complete, modular deep learning pipeline for low-dose C
 
 ## Declarations of use of autogeneration tools 
 
-This project made active use of **OpenAI's ChatGPT** as a development assistant throughout its creation.
+This project made active use of ChatGPT and DeepL Write as writing and development assistants throughout its creation.
 
 ### Areas Where ChatGPT Was Used
 
@@ -33,6 +33,14 @@ This project made active use of **OpenAI's ChatGPT** as a development assistant 
 
 - **README Generation**  
   This README was drafted and refined with help from ChatGPT.
+
+### Areas Where DeepL Was Used 
+
+Used for academic style refinement of written text:
+	-	Language Polishing
+Text segments (especially in the report and README) were revised using DeepL Write to improve clarity, tone, and grammatical precision in English.
+	-	**Important Note**:
+DeepL Write does not generate new content, it only reformulates existing text written to be more fluent and formal. It was not used to create any technical explanations or original text.
 
 ---
 
